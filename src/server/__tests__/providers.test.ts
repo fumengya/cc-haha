@@ -320,10 +320,30 @@ describe('ProviderService', () => {
         await svc.activateProvider('openai-official')
 
         const config = await readProvidersConfig()
+        const settings = await readSettings()
         expect(config.activeId).toBe('openai-official')
-        await expect(
-          fs.readFile(path.join(tmpDir, 'cc-haha', 'settings.json'), 'utf-8'),
-        ).rejects.toThrow()
+        expect(settings.env).toBeUndefined()
+      })
+
+      test('activating ChatGPT Official clears stale managed provider env', async () => {
+        const svc = new ProviderService()
+        const provider = await svc.addProvider(sampleInput({
+          apiFormat: 'openai_responses',
+          baseUrl: 'https://api.example.com/openai',
+          models: {
+            main: 'provider-main',
+            haiku: 'provider-haiku',
+            sonnet: 'provider-sonnet',
+            opus: 'provider-opus',
+          },
+        }))
+        await svc.activateProvider(provider.id)
+        expect(((await readSettings()).env as Record<string, string>).ANTHROPIC_BASE_URL).toContain('/proxy')
+
+        await svc.activateProvider('openai-official')
+
+        const settings = await readSettings()
+        expect(settings.env).toBeUndefined()
       })
     })
 

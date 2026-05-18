@@ -359,6 +359,7 @@ export class ProviderService {
     await this.writeIndex(index)
 
     if (isOpenAIOfficialProviderId(id)) {
+      await this.clearProviderFromSettings()
       return
     }
 
