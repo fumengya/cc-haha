@@ -38,6 +38,7 @@ import {
   createSessionBranch,
   SessionBranchingError,
 } from '../../utils/sessionBranching.js'
+import { registerFilesystemAccessRoot } from '../services/filesystemAccessRoots.js'
 
 const workspaceService = new WorkspaceService(
   async (sessionId) => (
@@ -314,7 +315,11 @@ async function getSessionRepositoryContext(url: URL): Promise<Response> {
     throw ApiError.badRequest('workDir query parameter is required')
   }
 
-  return Response.json(await getRepositoryContext(workDir))
+  const context = await getRepositoryContext(workDir)
+  registerFilesystemAccessRoot(workDir)
+  registerFilesystemAccessRoot(context.workDir)
+  registerFilesystemAccessRoot(context.repoRoot)
+  return Response.json(context)
 }
 
 async function requireSessionWorkspace(sessionId: string): Promise<string> {
@@ -633,6 +638,7 @@ async function getGitInfo(sessionId: string): Promise<Response> {
   if (!workDir) {
     throw ApiError.notFound(`Session not found: ${sessionId}`)
   }
+  registerFilesystemAccessRoot(workDir)
   const launchInfo = await sessionService.getSessionLaunchInfo(sessionId).catch(() => null)
   const repository = launchInfo?.repository
   const worktreeSession = launchInfo?.worktreeSession
