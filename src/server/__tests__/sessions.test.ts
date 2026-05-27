@@ -1142,6 +1142,30 @@ describe('SessionService', () => {
     })
   })
 
+  it('should persist session permission mode in launch metadata', async () => {
+    const workDir = path.join(tmpDir, 'permission-workdir')
+    await fs.mkdir(workDir, { recursive: true })
+    const { sessionId } = await (service.createSession as unknown as (
+      workDir?: string,
+      repositoryOptions?: unknown,
+      permissionMode?: string,
+    ) => Promise<{ sessionId: string; workDir: string }>)(workDir, undefined, 'acceptEdits')
+
+    let launchInfo = await service.getSessionLaunchInfo(sessionId)
+    expect(launchInfo?.permissionMode).toBe('acceptEdits')
+
+    await (service.appendSessionMetadata as unknown as (
+      sessionId: string,
+      metadata: { workDir: string; permissionMode?: string },
+    ) => Promise<void>)(sessionId, {
+      workDir,
+      permissionMode: 'plan',
+    })
+
+    launchInfo = await service.getSessionLaunchInfo(sessionId)
+    expect(launchInfo?.permissionMode).toBe('plan')
+  })
+
   it('should remove stale placeholder files after native CLI worktree startup', async () => {
     const sessionId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
     const sourceFile = await writeSessionFile('-tmp-source', sessionId, [
@@ -1875,6 +1899,27 @@ describe('Sessions API', () => {
     expect(body.sessionId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
     )
+  })
+
+  it('GET /api/sessions/:id/inspection should report persisted permission mode for inactive sessions', async () => {
+    const workDir = await fs.mkdtemp(path.join(tmpDir, 'api-session-permission-'))
+    const createRes = await fetch(`${baseUrl}/api/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workDir, permissionMode: 'bypassPermissions' }),
+    })
+    expect(createRes.status).toBe(201)
+
+    const { sessionId } = (await createRes.json()) as { sessionId: string }
+    const inspectionRes = await fetch(`${baseUrl}/api/sessions/${sessionId}/inspection?includeContext=0`)
+    expect(inspectionRes.status).toBe(200)
+
+    const inspection = (await inspectionRes.json()) as {
+      active: boolean
+      status: { permissionMode?: string }
+    }
+    expect(inspection.active).toBe(false)
+    expect(inspection.status.permissionMode).toBe('bypassPermissions')
   })
 
   it('GET /api/sessions/repository-context should return branch launch metadata', async () => {

@@ -1311,6 +1311,7 @@ export const zh: Record<TranslationKey, string> = {
   // ─── New Task Modal ──────────────────────────────────────
   'newTask.title': '新建定时任务',
   'newTask.localWarning': '本地任务仅在电脑唤醒时运行。',
+  'newTask.fullPermissions': '所有权限',
   'newTask.name': '名称',
   'newTask.namePlaceholder': 'daily-code-review',
   'newTask.description': '描述',

@@ -358,6 +358,7 @@ export class ConversationService {
         workDir: launchWorkDir,
         customTitle: launchInfo?.customTitle ?? null,
         repository: launchRepository,
+        permissionMode: options?.permissionMode || launchInfo?.permissionMode,
       })
     }
 
@@ -447,7 +448,7 @@ export class ConversationService {
   }
 
   setPermissionMode(sessionId: string, mode: string): boolean {
-    return this.sendSdkMessage(sessionId, {
+    const sent = this.sendSdkMessage(sessionId, {
       type: 'control_request',
       request_id: crypto.randomUUID(),
       request: {
@@ -455,6 +456,11 @@ export class ConversationService {
         mode,
       },
     })
+    if (sent) {
+      const session = this.sessions.get(sessionId)
+      if (session) session.permissionMode = mode
+    }
+    return sent
   }
 
   setMaxThinkingTokens(sessionId: string, maxThinkingTokens: number | null): boolean {

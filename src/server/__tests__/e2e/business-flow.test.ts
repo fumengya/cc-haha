@@ -74,7 +74,7 @@ describe('Business Flow: Scheduled Tasks', () => {
     expect(data.task.cron).toBe('0 9 * * 1-5')
     expect(data.task.prompt).toContain('git log')
     expect(data.task.recurring).toBe(true)
-    expect(data.task.permissionMode).toBe('default')
+    expect(data.task.permissionMode).toBe('bypassPermissions')
     expect(data.task.model).toBe('claude-sonnet-4-6')
     expect(data.task.createdAt).toBeGreaterThan(0)
   })

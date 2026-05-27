@@ -36,6 +36,7 @@ import {
   resolveSlashUiAction,
 } from '../components/chat/composerUtils'
 import type { AttachmentRef } from '../types/chat'
+import type { PermissionMode } from '../types/settings'
 import type { SlashCommandOption } from '../components/chat/composerUtils'
 
 type Attachment = ComposerAttachment
@@ -110,6 +111,8 @@ export function EmptySession() {
   const addToast = useUIStore((state) => state.addToast)
   const currentModel = useSettingsStore((state) => state.currentModel)
   const chatSendBehavior = useSettingsStore((state) => state.chatSendBehavior)
+  const defaultPermissionMode = useSettingsStore((state) => state.permissionMode)
+  const [draftPermissionMode, setDraftPermissionMode] = useState<PermissionMode>(defaultPermissionMode)
   const lastPluginReloadSummary = usePluginStore((state) => state.lastReloadSummary)
   const draftRuntimeSelection = useSessionRuntimeStore((state) => state.selections[DRAFT_RUNTIME_SELECTION_KEY])
   const draftRuntimeSelectionKey = draftRuntimeSelection
@@ -275,9 +278,12 @@ export function EmptySession() {
       const explicitDraftSelection = useSessionRuntimeStore.getState().selections[DRAFT_RUNTIME_SELECTION_KEY]
       const sessionId = await createSession(
         workDir || undefined,
-        selectedBranch
-          ? { repository: { branch: selectedBranch, worktree: useWorktree } }
-          : undefined,
+        {
+          ...(selectedBranch
+            ? { repository: { branch: selectedBranch, worktree: useWorktree } }
+            : {}),
+          permissionMode: draftPermissionMode,
+        },
       )
       if (explicitDraftSelection) {
         useSessionRuntimeStore.getState().setSelection(sessionId, explicitDraftSelection)
@@ -731,7 +737,12 @@ export function EmptySession() {
                     )}
                   </div>
 
-                  <PermissionModeSelector workDir={workDir} compact={isMobileComposer} />
+                  <PermissionModeSelector
+                    workDir={workDir}
+                    compact={isMobileComposer}
+                    value={draftPermissionMode}
+                    onChange={setDraftPermissionMode}
+                  />
                 </div>
 
                 <div className={`${isMobileComposer ? 'flex min-w-0 flex-1 items-center justify-end gap-2' : 'flex items-center gap-3'}`}>

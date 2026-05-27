@@ -43,6 +43,7 @@ export type SessionListItem = {
   projectRoot: string | null
   workDir: string | null
   workDirExists: boolean
+  permissionMode?: string
 }
 
 export type DeleteSessionFailure = {
@@ -68,6 +69,7 @@ export type SessionLaunchInfo = {
   worktreeSession?: PersistedWorktreeSession | null
   transcriptMessageCount: number
   customTitle: string | null
+  permissionMode?: string
 }
 
 export type TrimSessionResult = {
@@ -200,6 +202,7 @@ type RawEntry = {
     timestamp?: string
   }
   customTitle?: string
+  permissionMode?: string
   worktreeSession?: PersistedWorktreeSession | null
   title?: string
   [key: string]: unknown
@@ -216,6 +219,14 @@ type PersistedWorktreeSession = {
   tmuxSessionName?: string
   hookBased?: boolean
 }
+
+const VALID_SESSION_PERMISSION_MODES = new Set([
+  'default',
+  'acceptEdits',
+  'plan',
+  'bypassPermissions',
+  'dontAsk',
+])
 
 type ContentBlock = Record<string, unknown>
 
@@ -312,6 +323,21 @@ export class SessionService {
       const repository = (entries[i] as Record<string, unknown>)?.repository
       if (repository && typeof repository === 'object') {
         return repository as PreparedSessionWorkspace['repository']
+      }
+    }
+    return undefined
+  }
+
+  private resolvePermissionModeFromEntries(entries: RawEntry[]): string | undefined {
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const entry = entries[i]
+      if (entry?.type !== 'session-meta') continue
+      const permissionMode = entry.permissionMode
+      if (
+        typeof permissionMode === 'string' &&
+        VALID_SESSION_PERMISSION_MODES.has(permissionMode)
+      ) {
+        return permissionMode
       }
     }
     return undefined
@@ -1308,6 +1334,7 @@ export class SessionService {
       try {
         const entries = await this.readJsonlFile(filePath)
         const workDir = this.resolveWorkDirFromEntries(entries, projectDir)
+        const permissionMode = this.resolvePermissionModeFromEntries(entries)
         const projectRoot = await this.resolveProjectRootFromEntries(entries, workDir, projectDir)
         const workDirExists = await this.pathExists(workDir)
 
@@ -1337,6 +1364,7 @@ export class SessionService {
           projectRoot,
           workDir,
           workDirExists,
+          permissionMode,
         }
       } catch {
         // Skip unreadable files
@@ -1365,6 +1393,7 @@ export class SessionService {
     )
     const title = this.extractTitle(entries)
     const workDir = this.resolveWorkDirFromEntries(entries, projectDir)
+    const permissionMode = this.resolvePermissionModeFromEntries(entries)
     const projectRoot = await this.resolveProjectRootFromEntries(entries, workDir, projectDir)
     const workDirExists = await this.pathExists(workDir)
 
@@ -1386,6 +1415,7 @@ export class SessionService {
       projectRoot,
       workDir,
       workDirExists,
+      permissionMode,
       messages,
     }
   }
@@ -1413,6 +1443,7 @@ export class SessionService {
   async createSession(
     workDir?: string,
     repositoryOptions?: CreateSessionRepositoryOptions,
+    permissionMode?: string,
   ): Promise<{ sessionId: string; workDir: string }> {
     // Default to user home directory when no workDir specified
     const resolvedWorkDir = workDir || os.homedir()
@@ -1464,6 +1495,9 @@ export class SessionService {
       isMeta: true,
       workDir: absWorkDir,
       repository: preparedWorkspace.repository,
+      ...(permissionMode && VALID_SESSION_PERMISSION_MODES.has(permissionMode)
+        ? { permissionMode }
+        : {}),
       timestamp: now,
     }
 
@@ -1603,6 +1637,7 @@ export class SessionService {
     const workDir = this.resolveWorkDirFromEntries(entries, found.projectDir) || process.cwd()
     const repository = this.resolveRepositoryFromEntries(entries)
     const worktreeSession = this.resolveWorktreeSessionFromEntries(entries)
+    const permissionMode = this.resolvePermissionModeFromEntries(entries)
     let customTitle: string | null = null
 
     for (const entry of entries) {
@@ -1620,6 +1655,7 @@ export class SessionService {
       worktreeSession,
       transcriptMessageCount,
       customTitle,
+      permissionMode,
     }
   }
 
@@ -1682,6 +1718,7 @@ export class SessionService {
       workDir: string
       customTitle?: string | null
       repository?: PreparedSessionWorkspace['repository']
+      permissionMode?: string
     }
   ): Promise<void> {
     const matches = await this.findSessionFiles(sessionId)
@@ -1708,6 +1745,9 @@ export class SessionService {
       isMeta: true,
       workDir: normalizedWorkDir,
       repository,
+      ...(metadata.permissionMode && VALID_SESSION_PERMISSION_MODES.has(metadata.permissionMode)
+        ? { permissionMode: metadata.permissionMode }
+        : {}),
       timestamp: new Date().toISOString(),
     })
 

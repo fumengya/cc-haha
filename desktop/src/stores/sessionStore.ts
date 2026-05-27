@@ -8,10 +8,12 @@ import {
 import { useSessionRuntimeStore } from './sessionRuntimeStore'
 import { useTabStore } from './tabStore'
 import type { SessionListItem } from '../types/session'
+import type { PermissionMode } from '../types/settings'
 import { isPlaceholderSessionTitle } from '../lib/sessionTitle'
 
 type CreateSessionOptions = {
   repository?: CreateSessionRepositoryOptions
+  permissionMode?: PermissionMode
 }
 
 type BranchSessionResult = Pick<BranchSessionResponse, 'sessionId' | 'title' | 'workDir'>
@@ -41,6 +43,7 @@ type SessionStore = {
   clearSessionSelection: () => void
   renameSession: (id: string, title: string) => Promise<void>
   updateSessionTitle: (id: string, title: string) => void
+  updateSessionPermissionMode: (id: string, mode: PermissionMode) => void
   setActiveSession: (id: string | null) => void
 }
 
@@ -83,6 +86,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const { sessionId: id, workDir: resolvedWorkDir } = await sessionsApi.create({
       ...(workDir ? { workDir } : {}),
       ...(options?.repository ? { repository: options.repository } : {}),
+      ...(options?.permissionMode ? { permissionMode: options.permissionMode } : {}),
     })
     const now = new Date().toISOString()
     const optimisticSession: SessionListItem = {
@@ -95,6 +99,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       workDir: resolvedWorkDir ?? workDir ?? null,
       projectRoot: resolvedWorkDir ?? workDir ?? null,
       workDirExists: true,
+      permissionMode: options?.permissionMode,
     }
 
     set((state) => ({
@@ -205,6 +210,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => ({
       sessions: s.sessions.map((session) =>
         session.id === id ? { ...session, title } : session,
+      ),
+    }))
+  },
+
+  updateSessionPermissionMode: (id, mode) => {
+    set((s) => ({
+      sessions: s.sessions.map((session) =>
+        session.id === id ? { ...session, permissionMode: mode } : session,
       ),
     }))
   },

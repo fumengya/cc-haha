@@ -1309,6 +1309,7 @@ export const en = {
   // ─── New Task Modal ──────────────────────────────────────
   'newTask.title': 'New scheduled task',
   'newTask.localWarning': 'Local tasks only run while your computer is awake.',
+  'newTask.fullPermissions': 'Full permissions',
   'newTask.name': 'Name',
   'newTask.namePlaceholder': 'daily-code-review',
   'newTask.description': 'Description',

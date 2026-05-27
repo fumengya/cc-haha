@@ -43,6 +43,7 @@ vi.mock('../../i18n', () => ({
 }))
 
 import { PermissionModeSelector } from './PermissionModeSelector'
+import { useChatStore } from '../../stores/chatStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useTabStore } from '../../stores/tabStore'
@@ -53,6 +54,47 @@ describe('PermissionModeSelector', () => {
     useSettingsStore.setState({ permissionMode: 'default' })
     useSessionStore.setState({ sessions: [], activeSessionId: null })
     useTabStore.setState({ activeTabId: null, tabs: [] })
+  })
+
+  it('updates the active session without writing the global default mode', () => {
+    const setGlobalPermissionMode = vi.fn()
+    const setSessionPermissionMode = vi.fn()
+    useSettingsStore.setState({
+      permissionMode: 'default',
+      setPermissionMode: setGlobalPermissionMode,
+    })
+    useChatStore.setState({
+      setSessionPermissionMode,
+    } as Partial<ReturnType<typeof useChatStore.getState>>)
+    useSessionStore.setState({
+      activeSessionId: 'current-tab',
+      sessions: [
+        {
+          id: 'current-tab',
+          title: 'Current',
+          createdAt: '2026-05-24T00:00:00.000Z',
+          modifiedAt: '2026-05-24T00:00:00.000Z',
+          messageCount: 1,
+          projectPath: '/repo',
+          projectRoot: '/repo',
+          workDir: '/repo',
+          workDirExists: true,
+          permissionMode: 'default',
+        },
+      ],
+    })
+    useTabStore.setState({
+      activeTabId: 'current-tab',
+      tabs: [{ sessionId: 'current-tab', title: 'Current', type: 'session', status: 'idle' }],
+    })
+
+    render(<PermissionModeSelector />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ask permissions' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Auto accept edits/ }))
+
+    expect(setGlobalPermissionMode).not.toHaveBeenCalled()
+    expect(setSessionPermissionMode).toHaveBeenCalledWith('current-tab', 'acceptEdits')
   })
 
   it('labels the compact mobile trigger and opens a phone-sized menu sheet', () => {

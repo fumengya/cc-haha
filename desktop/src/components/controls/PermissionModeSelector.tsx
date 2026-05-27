@@ -31,7 +31,7 @@ type Props = {
 export function PermissionModeSelector({ workDir: workDirProp, compact = false, value, onChange }: Props = {}) {
   const t = useTranslation()
   const isMobile = useMobileViewport() && !isTauriRuntime()
-  const { permissionMode: storeMode, setPermissionMode } = useSettingsStore()
+  const { permissionMode: storeMode } = useSettingsStore()
   const setSessionPermissionMode = useChatStore((s) => s.setSessionPermissionMode)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const sessions = useSessionStore((s) => s.sessions)
@@ -41,8 +41,6 @@ export function PermissionModeSelector({ workDir: workDirProp, compact = false, 
   const menuRef = useRef<HTMLDivElement>(null)
 
   const isControlled = value !== undefined
-  const currentMode = isControlled ? value : storeMode
-
   const PERMISSION_ITEMS: Array<{
     value: PermissionMode
     label: string
@@ -89,6 +87,9 @@ export function PermissionModeSelector({ workDir: workDirProp, compact = false, 
   const activeSession = activeTabId
     ? sessions.find((s) => s.id === activeTabId)
     : null
+  const currentMode = isControlled
+    ? value
+    : (activeSession?.permissionMode as PermissionMode | undefined) || storeMode
   const workDir = workDirProp || activeSession?.workDir || '~'
   const compactButtonClass = compact
     ? isMobile
@@ -135,7 +136,6 @@ export function PermissionModeSelector({ workDir: workDirProp, compact = false, 
             if (isControlled) {
               onChange?.(item.value)
             } else {
-              void setPermissionMode(item.value)
               if (activeTabId) setSessionPermissionMode(activeTabId, item.value)
             }
             setOpen(false)
@@ -267,7 +267,6 @@ export function PermissionModeSelector({ workDir: workDirProp, compact = false, 
                   if (isControlled) {
                     onChange?.('bypassPermissions')
                   } else {
-                    void setPermissionMode('bypassPermissions')
                     if (activeTabId) setSessionPermissionMode(activeTabId, 'bypassPermissions')
                   }
                   setConfirmDialog(false)
