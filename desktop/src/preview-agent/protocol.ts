@@ -4,6 +4,7 @@ export type AgentMessage =
   | { type: 'error'; message: string }
   | { type: 'selection'; payload: unknown }   // M5 填充结构
   | { type: 'screenshot'; dataUrl: string; kind: 'full' | 'viewport' | 'element' } // M4
+  | { type: 'picker-exited' }
 
 export type HostMessage =
   | { type: 'enter-picker' }

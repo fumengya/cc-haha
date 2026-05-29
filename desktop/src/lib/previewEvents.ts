@@ -34,6 +34,9 @@ export async function subscribePreviewEvents(sessionId: string): Promise<() => v
           : [],
       })
     }
+    else if (msg.type === 'picker-exited') {
+      store.setPicker(sessionId, false)
+    }
     else if (msg.type === 'error') {
       console.warn('[preview-agent]', msg)
     }

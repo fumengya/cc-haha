@@ -52,4 +52,12 @@ describe('subscribePreviewEvents', () => {
     expect(() => listeners['preview://event']!({ payload: JSON.stringify({ v: 1, type: 'selection', payload: { pageUrl: 'http://x/' } }) })).not.toThrow()
     expect(useBrowserPanelStore.getState().bySession['s1']!.pickerActive).toBe(false)
   })
+
+  it('picker-exited event resets pickerActive', async () => {
+    useBrowserPanelStore.getState().open('s1', 'http://x/a')
+    useBrowserPanelStore.getState().setPicker('s1', true)
+    await subscribePreviewEvents('s1')
+    listeners['preview://event']!({ payload: JSON.stringify({ v: 1, type: 'picker-exited' }) })
+    expect(useBrowserPanelStore.getState().bySession['s1']!.pickerActive).toBe(false)
+  })
 })

@@ -2,6 +2,7 @@ import { createBridge } from './bridge'
 import { captureToDataUrl, captureAnnotatedRegion } from './screenshot'
 import { createPicker } from './picker'
 import { buildElementMetadata } from './metadata'
+import { createEditBubble } from './editBubble'
 
 ;(() => {
   ;(window as unknown as { __PREVIEW_AGENT__?: boolean }).__PREVIEW_AGENT__ = true
@@ -22,9 +23,18 @@ import { buildElementMetadata } from './metadata'
   })
 
   let pickerOn = false
+  let activeBubble: { destroy: () => void } | null = null
   const picker = createPicker({ onSelect: () => {} })
 
-  const emitSelection = async (el: Element) => {
+  const teardown = () => {
+    activeBubble?.destroy()
+    activeBubble = null
+    pickerOn = false
+    picker.exit()
+    bridge.send({ type: 'picker-exited' })
+  }
+
+  const emitSelection = async (el: Element, change?: unknown) => {
     try {
       const dataUrl = await captureAnnotatedRegion(el)
       bridge.send({
@@ -33,6 +43,7 @@ import { buildElementMetadata } from './metadata'
           pageUrl: window.location.href,
           sourceHint: document.title || undefined,
           element: buildElementMetadata(el),
+          change,
           screenshot: { dataUrl, kind: 'region' },
         },
       })
@@ -40,7 +51,7 @@ import { buildElementMetadata } from './metadata'
   }
 
   bridge.on('enter-picker', () => { pickerOn = true; picker.enter() })
-  bridge.on('exit-picker', () => { pickerOn = false; picker.exit() })
+  bridge.on('exit-picker', () => { teardown() })
 
   document.addEventListener('mousemove', (e) => {
     if (!pickerOn) return
@@ -49,13 +60,16 @@ import { buildElementMetadata } from './metadata'
   }, true)
 
   document.addEventListener('click', (e) => {
-    if (!pickerOn) return
+    if (!pickerOn || activeBubble) return
     e.preventDefault(); e.stopPropagation()
     picker.select()
-    const el = picker.current()   // capture BEFORE exit (exit clears current)
-    pickerOn = false
-    picker.exit()
-    if (el) void emitSelection(el)
+    const el = picker.current()
+    pickerOn = false   // stop hovering; keep highlight on the selected element while the bubble is open
+    if (!(el instanceof HTMLElement)) { teardown(); return }
+    activeBubble = createEditBubble(el, {
+      onConfirm: (change) => { teardown(); void emitSelection(el, change) },
+      onCancel: () => { teardown() },
+    })
   }, true)
 
   const onReady = () => { bridge.reportReady(); bridge.reportNavigated() }
