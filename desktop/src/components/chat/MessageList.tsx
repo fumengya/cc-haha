@@ -1948,6 +1948,7 @@ export const MessageBlock = memo(function MessageBlock({
             content={message.content}
             attachments={message.attachments}
             branchAction={branchAction}
+            timestamp={message.timestamp}
           />
         </SelectableChatMessage>
       )
@@ -1959,7 +1960,12 @@ export const MessageBlock = memo(function MessageBlock({
           role="assistant"
           content={message.content}
         >
-          <AssistantMessage content={message.content} branchAction={branchAction} sessionId={sessionId ?? undefined} />
+          <AssistantMessage
+            content={message.content}
+            branchAction={branchAction}
+            sessionId={sessionId ?? undefined}
+            timestamp={message.timestamp}
+          />
         </SelectableChatMessage>
       )
     case 'thinking':

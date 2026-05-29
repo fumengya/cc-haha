@@ -17,11 +17,12 @@ type Props = {
   isStreaming?: boolean
   branchAction?: MessageBranchAction
   sessionId?: string
+  timestamp?: number
 }
 
 const MAX_CARDS = 3
 
-export const AssistantMessage = memo(function AssistantMessage({ content, isStreaming, branchAction, sessionId }: Props) {
+export const AssistantMessage = memo(function AssistantMessage({ content, isStreaming, branchAction, sessionId, timestamp }: Props) {
   const t = useTranslation()
   const workDir = useWorkspacePanelStore((s) => (sessionId ? s.statusBySession[sessionId]?.workDir : undefined))
 
@@ -107,6 +108,7 @@ export const AssistantMessage = memo(function AssistantMessage({ content, isStre
           copyLabel="Copy reply"
           branchAction={branchAction}
           align="start"
+          timestamp={timestamp}
         />
       </div>
     </div>

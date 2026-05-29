@@ -2665,6 +2665,9 @@ describe('MessageList nested tool calls', () => {
   })
 
   it('keeps user actions anchored to the right bubble and assistant actions to the left bubble', () => {
+    const now = new Date('2026-05-29T16:00:00+08:00').getTime()
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+
     useChatStore.setState({
       sessions: {
         [ACTIVE_TAB]: makeSessionState({
@@ -2673,13 +2676,13 @@ describe('MessageList nested tool calls', () => {
               id: 'user-1',
               type: 'user_text',
               content: '请把这条 prompt 放在右侧',
-              timestamp: 1,
+              timestamp: now - 5 * 60_000,
             },
             {
               id: 'assistant-1',
               type: 'assistant_text',
               content: '这条回复应该停在左侧。',
-              timestamp: 2,
+              timestamp: now - 2 * 60 * 60_000,
             },
           ],
         }),
@@ -2700,6 +2703,10 @@ describe('MessageList nested tool calls', () => {
     expect(assistantShell?.className).not.toContain('ml-10')
     expect(userActions?.getAttribute('data-align')).toBe('end')
     expect(assistantActions?.getAttribute('data-align')).toBe('start')
+    expect(userActions?.className).toContain('invisible')
+    expect(userActions?.className).toContain('group-hover:visible')
+    expect(within(userActions as HTMLElement).getByText('5m ago')).toBeTruthy()
+    expect(within(assistantActions as HTMLElement).getByText('2h ago')).toBeTruthy()
   })
 
   it('uses the document column for markdown-heavy assistant replies', () => {
