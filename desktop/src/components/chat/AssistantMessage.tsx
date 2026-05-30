@@ -47,7 +47,11 @@ export const AssistantMessage = memo(function AssistantMessage({ content, isStre
   )
 
   const outputTargets = useMemo(
-    () => (isStreaming || !sessionId ? [] : extractAssistantOutputTargets(content, { workDir })),
+    () =>
+      isStreaming || !sessionId
+        ? []
+        : // Image targets render inline via <InlineImageGallery>; never also as a card.
+          extractAssistantOutputTargets(content, { workDir }).filter((target) => target.kind !== 'image'),
     [content, isStreaming, sessionId, workDir],
   )
 
@@ -75,7 +79,7 @@ export const AssistantMessage = memo(function AssistantMessage({ content, isStre
             streaming={isStreaming}
             onLinkClick={sessionId ? handleLinkClick : undefined}
           />
-          {!isStreaming && <InlineImageGallery text={content} />}
+          {!isStreaming && <InlineImageGallery text={content} sessionId={sessionId} workDir={workDir} />}
           {isStreaming && (
             <span className="ml-0.5 inline-block h-4 w-0.5 animate-shimmer bg-[var(--color-brand)] align-text-bottom" />
           )}

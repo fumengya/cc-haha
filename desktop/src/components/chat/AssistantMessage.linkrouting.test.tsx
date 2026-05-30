@@ -93,6 +93,41 @@ describe('AssistantMessage output-target cards', () => {
     expect(screen.getByText('assistantOutputs.kind.markdown')).toBeInTheDocument()
   })
 
+  it('renders a relative image inline (an <img>) but NOT as an image card', () => {
+    render(
+      <AssistantMessage
+        sessionId="s1"
+        content={'渲染结果见 outputs/foo/preview_frame.png'}
+        isStreaming={false}
+      />,
+    )
+    // Image renders inline through InlineImageGallery (workDir is undefined in this
+    // test's mock, so the relative path resolves as-is and is served via /preview-fs).
+    const img = screen.getByRole('img') as HTMLImageElement
+    expect(img.getAttribute('src')).toBe(
+      'http://127.0.0.1:4321/preview-fs/s1/outputs/foo/preview_frame.png',
+    )
+    // ...and is NOT duplicated as an output-target card.
+    expect(screen.queryByText('assistantOutputs.kind.image')).toBeNull()
+  })
+
+  it('still renders md/html/localhost cards when those references are present', () => {
+    render(
+      <AssistantMessage
+        sessionId="s1"
+        content={[
+          '本地服务 http://localhost:5173/',
+          '见 [说明](docs/readme.md)',
+          '页面 [首页](out/index.html)',
+        ].join('\n')}
+        isStreaming={false}
+      />,
+    )
+    expect(screen.getByText('assistantOutputs.kind.localhost')).toBeInTheDocument()
+    expect(screen.getByText('assistantOutputs.kind.markdown')).toBeInTheDocument()
+    expect(screen.getByText('assistantOutputs.kind.html')).toBeInTheDocument()
+  })
+
   it('does NOT render cards while streaming', () => {
     render(
       <AssistantMessage
