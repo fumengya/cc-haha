@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildOpenWithItems, describeFileType, type OpenWithContext, type OpenWithDeps } from './openWithItems'
+import { buildOpenWithItems, describeFileType, isPreviewableChangedFile, type OpenWithContext, type OpenWithDeps } from './openWithItems'
 import type { OpenTarget } from '../stores/openTargetStore'
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -44,6 +44,26 @@ describe('describeFileType', () => {
       categoryKey: 'openWith.fileType.file',
       ext: 'BIN',
     })
+  })
+})
+
+// ──────────────────────────────────────────────────────────────────────────────
+// isPreviewableChangedFile tests — only md/html/image get the open-with affordance
+// ──────────────────────────────────────────────────────────────────────────────
+describe('isPreviewableChangedFile', () => {
+  it.each([
+    'a.md', 'a.markdown', 'x.html', 'x.htm', 'X.HTML',
+    'y.png', 'y.JPG', 'z.jpeg', 'g.gif', 'w.webp', 'v.svg',
+    'docs/sub/readme.md',
+  ])('previewable: %s → true', (p) => {
+    expect(isPreviewableChangedFile(p)).toBe(true)
+  })
+
+  it.each([
+    'main.ts', 'main.tsx', 'data.json', 'style.css', 'notes.txt',
+    'lib.rs', 'Makefile', 'archive.zip', 'no-ext', 'a.mdx',
+  ])('non-previewable: %s → false', (p) => {
+    expect(isPreviewableChangedFile(p)).toBe(false)
   })
 })
 

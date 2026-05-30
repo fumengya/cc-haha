@@ -171,11 +171,23 @@ describe('CurrentTurnChangeCard – open-with buttons', () => {
     openPreviewSpy.mockResolvedValue(undefined)
   })
 
-  it('renders one "open-with" button per file', () => {
+  it('renders an "open-with" button for each previewable file', () => {
     renderCard(['/w/proj/README.md', '/w/proj/index.html'])
     // aria-label is the i18n key itself (identity mock)
     const buttons = screen.getAllByRole('button', { name: 'openWith.title' })
     expect(buttons).toHaveLength(2)
+  })
+
+  it('does NOT render an "open-with" button for a source file (diff toggle stays)', () => {
+    renderCard(['/w/proj/src/main.ts'])
+    expect(screen.queryAllByRole('button', { name: 'openWith.title' })).toHaveLength(0)
+    // source files keep their inline diff toggle — only the open-with pill is dropped
+    expect(screen.getByRole('button', { name: /turnChangesShowDiffAria/ })).toBeInTheDocument()
+  })
+
+  it('mixed turn: only previewable rows (md/html) get the open-with button, not .ts', () => {
+    renderCard(['/w/proj/README.md', '/w/proj/src/main.ts', '/w/proj/index.html'])
+    expect(screen.getAllByRole('button', { name: 'openWith.title' })).toHaveLength(2)
   })
 
   it('clicking README.md open-with opens menu with workspace preview item', async () => {

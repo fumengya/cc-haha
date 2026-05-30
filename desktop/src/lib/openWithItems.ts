@@ -19,6 +19,18 @@ export function describeFileType(path: string): FileTypeInfo {
   return { icon: 'insert_drive_file', categoryKey: 'openWith.fileType.file', ext }
 }
 
+const PREVIEWABLE_CHANGED_FILE_RE = /\.(md|markdown|html?|png|jpe?g|gif|webp|svg)$/i
+
+/**
+ * True only for changed-file types with a meaningful *rendered* preview
+ * (markdown / html / image). Source files (.ts/.json/.css …) return false.
+ * Used to decide which change-card rows get the "open with" affordance —
+ * we don't want an open-with pill on every file when a turn touches many.
+ */
+export function isPreviewableChangedFile(path: string): boolean {
+  return PREVIEWABLE_CHANGED_FILE_RE.test(path)
+}
+
 // ─── Open-with items ──────────────────────────────────────────────────────────
 
 export type OpenWithIcon = 'in-app-browser' | 'system' | 'ide' | 'file-manager' | 'preview'

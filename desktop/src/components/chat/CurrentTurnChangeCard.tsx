@@ -5,7 +5,7 @@ import { sessionsApi, type SessionTurnCheckpoint } from '../../api/sessions'
 import { useTranslation, type TranslationKey } from '../../i18n'
 import { WorkspaceDiffSurface } from '../workspace/WorkspaceCodeSurface'
 import { OpenWithMenu } from '../common/OpenWithMenu'
-import { buildOpenWithItems, describeFileType, type OpenWithItem } from '../../lib/openWithItems'
+import { buildOpenWithItems, describeFileType, isPreviewableChangedFile, type OpenWithItem } from '../../lib/openWithItems'
 import { openWithContextForWorkspaceFile } from '../../lib/openWithContextForHref'
 import { getServerBaseUrl } from '../../lib/desktopRuntime'
 import { useOpenTargetStore } from '../../stores/openTargetStore'
@@ -176,6 +176,7 @@ export function CurrentTurnChangeCard({
           const diffState = diffByPath[fileEntry.apiPath]
           const fileName = fileEntry.displayPath.split('/').pop() || fileEntry.displayPath
           const typeInfo = describeFileType(fileEntry.displayPath)
+          const previewable = isPreviewableChangedFile(fileEntry.displayPath)
           return (
             <div key={fileEntry.apiPath}>
               <div className="flex items-center gap-2">
@@ -196,15 +197,17 @@ export function CurrentTurnChangeCard({
                   </span>
                   <span className="material-symbols-outlined shrink-0 text-[18px] text-[var(--color-text-tertiary)]">{isExpanded ? 'keyboard_arrow_down' : 'chevron_right'}</span>
                 </button>
-                <button
-                  type="button"
-                  aria-label={t('openWith.title')}
-                  onClick={(event) => handleOpenWith(event, fileEntry)}
-                  className="mr-2 inline-flex h-8 shrink-0 items-center gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/35"
-                >
-                  {t('openWith.title')}
-                  <ChevronDown size={14} strokeWidth={1.9} />
-                </button>
+                {previewable && (
+                  <button
+                    type="button"
+                    aria-label={t('openWith.title')}
+                    onClick={(event) => handleOpenWith(event, fileEntry)}
+                    className="mr-2 inline-flex h-8 shrink-0 items-center gap-1 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/35"
+                  >
+                    {t('openWith.title')}
+                    <ChevronDown size={14} strokeWidth={1.9} />
+                  </button>
+                )}
               </div>
 
               {isExpanded && (
