@@ -150,7 +150,7 @@ export const handleWebSocket = {
     }
 
     addActiveClient(sessionId, ws)
-    if (prewarmedSessions.has(sessionId)) {
+    if (prewarmPendingSessions.has(sessionId) || prewarmedSessions.has(sessionId)) {
       bindPrewarmMetadataCapture(sessionId)
     } else {
       bindClientSessionOutput(sessionId, ws)
@@ -2235,5 +2235,11 @@ export function __resetWebSocketHandlerStateForTests(): void {
   activeSessions.clear()
   clientOutputCallbacks.clear()
   sessionCleanupTimers.clear()
+  prewarmPendingSessions.clear()
+  prewarmedSessions.clear()
   prewarmIdleTimers.clear()
+}
+
+export function __markPrewarmPendingForTests(sessionId: string): void {
+  prewarmPendingSessions.add(sessionId)
 }

@@ -5,6 +5,7 @@ export type H5RequestContext = {
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
 const LOCAL_ORIGINS = new Set([
+  'file://',
   'http://tauri.localhost',
   'https://tauri.localhost',
   'tauri://localhost',

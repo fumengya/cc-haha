@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/client'
+import { browserHost } from '../lib/desktopHost/browserHost'
 
 describe('settingsStore locale defaults', () => {
   beforeEach(() => {
@@ -336,6 +337,8 @@ describe('settingsStore app mode', () => {
     vi.resetModules()
     vi.clearAllMocks()
     delete (window as unknown as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__
+    Reflect.deleteProperty(window, 'desktopHost')
+    Reflect.deleteProperty(window, '__TAURI__')
   })
 
   it('hydrates app mode from the native desktop command', async () => {
@@ -357,6 +360,34 @@ describe('settingsStore app mode', () => {
       mode: 'portable',
       portableDir: 'C:\\cc-haha\\CLAUDE_CONFIG_DIR',
       defaultPortableDir: 'C:\\cc-haha\\CLAUDE_CONFIG_DIR',
+    })
+  })
+
+  it('hydrates app mode from an injected desktop host', async () => {
+    const getAppMode = vi.fn().mockResolvedValue({
+      mode: 'portable',
+      portableDir: 'D:\\cc-haha\\data',
+      defaultPortableDir: 'D:\\cc-haha\\data',
+    })
+    window.desktopHost = {
+      ...browserHost,
+      kind: 'electron',
+      isDesktop: true,
+      appMode: {
+        ...browserHost.appMode,
+        get: getAppMode,
+      },
+    }
+
+    const { useSettingsStore } = await import('./settingsStore')
+
+    await useSettingsStore.getState().fetchAppMode()
+
+    expect(getAppMode).toHaveBeenCalledTimes(1)
+    expect(useSettingsStore.getState().appMode).toEqual({
+      mode: 'portable',
+      portableDir: 'D:\\cc-haha\\data',
+      defaultPortableDir: 'D:\\cc-haha\\data',
     })
   })
 
@@ -388,6 +419,37 @@ describe('settingsStore app mode', () => {
       defaultPortableDir: 'C:\\cc-haha\\CLAUDE_CONFIG_DIR',
       activeConfigDir: 'C:\\cc-haha\\CLAUDE_CONFIG_DIR',
       configDirSource: 'portable',
+    })
+    expect(useSettingsStore.getState().appModeRequiresRestart).toBe(true)
+  })
+
+  it('persists app mode through an injected desktop host', async () => {
+    const setAppMode = vi.fn().mockResolvedValue(undefined)
+    window.desktopHost = {
+      ...browserHost,
+      kind: 'electron',
+      isDesktop: true,
+      appMode: {
+        ...browserHost.appMode,
+        set: setAppMode,
+      },
+    }
+
+    const { useSettingsStore } = await import('./settingsStore')
+    useSettingsStore.setState({
+      appMode: {
+        mode: 'default',
+        portableDir: null,
+        defaultPortableDir: 'D:\\cc-haha\\data',
+      },
+      appModeRequiresRestart: false,
+    })
+
+    await useSettingsStore.getState().setAppMode('portable')
+
+    expect(setAppMode).toHaveBeenCalledWith({
+      mode: 'portable',
+      portableDir: 'D:\\cc-haha\\data',
     })
     expect(useSettingsStore.getState().appModeRequiresRestart).toBe(true)
   })

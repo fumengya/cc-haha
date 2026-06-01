@@ -1664,6 +1664,7 @@ export const zh: Record<TranslationKey, string> = {
   'tabs.closeConfirmStop': '停止并关闭',
   'tabs.closeAllConfirmTitle': '多个会话运行中',
   // ─── Slash Command Descriptions ──────────────────────────────────────
+  'slashCmd.agent.description': '使用指定 Agent 执行提示',
   'slashCmd.mcp.description': '打开当前聊天上下文中可用的 MCP 工具',
   'slashCmd.skills.description': '浏览当前上下文中可直接调用的技能',
   'slashCmd.help.description': '查看可用的桌面端与 Agent 命令',

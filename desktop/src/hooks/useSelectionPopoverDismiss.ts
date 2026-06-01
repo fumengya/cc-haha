@@ -76,6 +76,11 @@ export function useSelectionPopoverDismiss({
   useEffect(() => {
     if (!active) return
 
+    const dismiss = () => {
+      onDismiss()
+      clearWindowSelection()
+    }
+
     const handlePointerDown = (event: PointerEvent) => {
       const popover = popoverRef.current
       const target = event.target
@@ -83,11 +88,18 @@ export function useSelectionPopoverDismiss({
         return
       }
 
-      onDismiss()
-      clearWindowSelection()
+      dismiss()
+    }
+
+    const handleScroll = () => {
+      dismiss()
     }
 
     document.addEventListener('pointerdown', handlePointerDown, true)
-    return () => document.removeEventListener('pointerdown', handlePointerDown, true)
+    document.addEventListener('scroll', handleScroll, true)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true)
+      document.removeEventListener('scroll', handleScroll, true)
+    }
   }, [active, onDismiss, popoverRef])
 }

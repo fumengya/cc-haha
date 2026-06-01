@@ -2,9 +2,11 @@
 import '@testing-library/jest-dom'
 import { render, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { browserHost } from '../../lib/desktopHost/browserHost'
 
 const openTarget = vi.hoisted(() => vi.fn())
 const shellOpen = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const hostOpenPath = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
 vi.mock('../../stores/openTargetStore', () => ({
   useOpenTargetStore: (sel: (s: unknown) => unknown) =>
@@ -30,6 +32,19 @@ import { WorkspaceFileOpenWith } from './WorkspaceFileOpenWith'
 describe('WorkspaceFileOpenWith', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.desktopHost = {
+      ...browserHost,
+      kind: 'electron',
+      isDesktop: true,
+      capabilities: {
+        ...browserHost.capabilities,
+        shell: true,
+      },
+      shell: {
+        ...browserHost.shell,
+        openPath: hostOpenPath,
+      },
+    }
   })
 
   it('renders only IDE and file-manager items', () => {
@@ -65,5 +80,6 @@ describe('WorkspaceFileOpenWith', () => {
   it('does not call shell open from the file open-with menu', () => {
     render(<WorkspaceFileOpenWith absolutePath="/w/report.md" />)
     expect(shellOpen).not.toHaveBeenCalled()
+    expect(hostOpenPath).not.toHaveBeenCalled()
   })
 })

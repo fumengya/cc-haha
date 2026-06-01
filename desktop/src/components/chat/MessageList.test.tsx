@@ -1715,6 +1715,36 @@ describe('MessageList nested tool calls', () => {
     expect(window.getSelection()?.toString()).toBe('')
   })
 
+  it('dismisses the selected-message action when the message list scrolls', async () => {
+    useChatStore.setState({
+      sessions: {
+        [ACTIVE_TAB]: makeSessionState({
+          messages: [{
+            id: 'assistant-1',
+            type: 'assistant_text',
+            content: 'Scrolling should clear this selected reply.',
+            timestamp: 1,
+          }],
+        }),
+      },
+    })
+
+    const { container } = render(<MessageList />)
+
+    const assistantText = screen.getByText(/Scrolling should clear/)
+    await selectMessageText(assistantText, 'selected reply')
+    expect(screen.getByRole('button', { name: 'Add to chat' })).toBeTruthy()
+
+    const scroller = container.querySelector('.overflow-y-auto') as HTMLDivElement
+    await act(async () => {
+      fireEvent.scroll(scroller)
+      await Promise.resolve()
+    })
+
+    expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
+    expect(window.getSelection()?.toString()).toBe('')
+  })
+
   it('keeps only the latest selected-message action when selecting across messages', async () => {
     useChatStore.setState({
       sessions: {

@@ -12,6 +12,7 @@ import { useSessionStore } from '../../stores/sessionStore'
 import { useWorkspacePanelStore } from '../../stores/workspacePanelStore'
 import { useTerminalPanelStore } from '../../stores/terminalPanelStore'
 import { useTranslation } from '../../i18n'
+import { getDesktopHost } from '../../lib/desktopHost'
 import { WindowControls, showWindowControls } from './WindowControls'
 import { OpenProjectMenu } from './OpenProjectMenu'
 import { Folder, FolderOpen, SquareTerminal } from 'lucide-react'
@@ -19,7 +20,9 @@ import { ActionDialog } from '../shared/ActionDialog'
 
 const TAB_WIDTH = 180
 const DRAG_START_THRESHOLD = 4
-const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
+const desktopHost = getDesktopHost()
+const isDesktopRuntime = desktopHost.isDesktop
+const canStartWindowDragging = desktopHost.capabilities.windowControls
 
 type PendingCloseRequest = {
   tabs: Tab[]
@@ -103,13 +106,8 @@ export function TabBar() {
   }, [activeChatSessionIds, tabs])
 
   useEffect(() => {
-    if (!isTauri) return
-    import('@tauri-apps/api/window')
-      .then(({ getCurrentWindow }) => {
-        const win = getCurrentWindow()
-        startDraggingRef.current = () => win.startDragging()
-      })
-      .catch(() => {})
+    if (!canStartWindowDragging) return
+    startDraggingRef.current = () => getDesktopHost().window.startDragging()
   }, [])
 
   const updateScrollState = useCallback(() => {
@@ -373,7 +371,7 @@ export function TabBar() {
       </div>
 
       <div className="flex shrink-0 items-center gap-1 border-l border-[var(--color-border)]/70 px-2">
-        {isTauri && isActiveSessionTab && (
+        {isDesktopRuntime && isActiveSessionTab && (
           <OpenProjectMenu path={openProjectPath} />
         )}
         <ToolbarIconButton
@@ -406,7 +404,7 @@ export function TabBar() {
         )}
       </div>
 
-      {isTauri && (
+      {isDesktopRuntime && (
         <div
           data-testid="tab-bar-drag-gutter"
           data-tauri-drag-region

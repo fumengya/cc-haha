@@ -36,6 +36,7 @@ export type CorsResolutionOptions = {
 }
 
 const LOCAL_ORIGINS = new Set([
+  'file://',
   'http://tauri.localhost',
   'https://tauri.localhost',
   'tauri://localhost',

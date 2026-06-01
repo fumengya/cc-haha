@@ -53,6 +53,8 @@ export type ComposerReferenceInsertion = {
   nonce: number
 }
 
+export type ComposerPrefillMode = 'replace' | 'append'
+
 export type PerSessionState = {
   messages: UIMessage[]
   chatState: ChatState
@@ -87,6 +89,7 @@ export type PerSessionState = {
   composerPrefill?: {
     text: string
     attachments?: UIAttachment[]
+    mode?: ComposerPrefillMode
     nonce: number
   } | null
   composerInsertion?: ComposerReferenceInsertion | null
@@ -157,8 +160,9 @@ type ChatStore = {
   reloadHistory: (sessionId: string) => Promise<void>
   queueComposerPrefill: (
     sessionId: string,
-    prefill: { text: string; attachments?: UIAttachment[] },
+    prefill: { text: string; attachments?: UIAttachment[]; mode?: ComposerPrefillMode },
   ) => void
+  clearComposerPrefill: (sessionId: string, nonce?: number) => void
   queueComposerInsertion: (
     sessionId: string,
     insertion: Omit<ComposerReferenceInsertion, 'nonce'>,
@@ -1203,9 +1207,19 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         composerPrefill: {
           text: prefill.text,
           attachments: prefill.attachments,
+          mode: prefill.mode,
           nonce: Date.now(),
         },
       })),
+    }))
+  },
+
+  clearComposerPrefill: (sessionId, nonce) => {
+    set((state) => ({
+      sessions: updateSessionIn(state.sessions, sessionId, (session) => {
+        if (nonce !== undefined && session.composerPrefill?.nonce !== nonce) return {}
+        return { composerPrefill: null }
+      }),
     }))
   },
 

@@ -45,6 +45,9 @@ describe('feature quality contract', () => {
     expect(packageJson.scripts?.['quality:verify']).toBe('bun run quality:pr')
     expect(packageJson.scripts?.['quality:push']).toBe('bun run quality:gate --mode pr --skip coverage')
     expect(packageJson.scripts?.['check:persistence-upgrade']).toBe('bun run scripts/quality-gate/persistence-upgrade.ts')
+    expect(packageJson.scripts?.['check:native']).toContain('electron:package:dir')
+    expect(packageJson.scripts?.['check:native']).toContain('test:package-smoke:current')
+    expect(packageJson.scripts?.['test:package-smoke:current']).toBe('bun run scripts/quality-gate/package-smoke/current.ts')
     expect(prePushHook).toContain('bun run quality:push')
     expect(prePushHook).not.toContain('\nbun run quality:pr\n')
     expect(contributing).toContain('bun run verify')
@@ -55,6 +58,20 @@ describe('feature quality contract', () => {
     expect(englishContributing).toContain('AI Coding Agent Fix Loop')
     expect(rootContributing).toContain('bun run verify')
     expect(rootContributing).toContain('bun run quality:push')
+  })
+
+  test('keeps desktop native CI aligned with Electron packaging', () => {
+    const prQuality = readFileSync('.github/workflows/pr-quality.yml', 'utf8')
+    const buildSidecars = readFileSync('desktop/scripts/build-sidecars.ts', 'utf8')
+
+    expect(prQuality).toContain('run: bun run check:native')
+    expect(prQuality).not.toContain('dtolnay/rust-toolchain')
+    expect(prQuality).not.toContain('swatinem/rust-cache')
+    expect(prQuality).not.toContain('libwebkit2gtk')
+    expect(prQuality).not.toContain('libayatana-appindicator')
+    expect(buildSidecars).not.toContain("Bun.spawn(['rustc'")
+    expect(buildSidecars).toContain("process.platform")
+    expect(buildSidecars).toContain("process.arch")
   })
 
   test('keeps general AI coding tools pointed at the same quality bar', () => {

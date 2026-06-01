@@ -1660,6 +1660,7 @@ export const en = {
   'tabs.closeConfirmMessage': 'This session is still running. What would you like to do?',
   'tabs.closeConfirmKeep': 'Keep Running',
   // ─── Slash Command Descriptions ──────────────────────────────────────
+  'slashCmd.agent.description': 'Run a prompt with a selected Agent',
   'slashCmd.mcp.description': 'Open available MCP tools for the current chat context',
   'slashCmd.skills.description': 'Browse user-invocable skills for the current chat context',
   'slashCmd.help.description': 'Show available desktop and agent commands',

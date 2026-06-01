@@ -8,6 +8,7 @@ import {
 } from '../api/desktopUiPreferences'
 import { type Locale, useTranslation } from '../i18n'
 import { useSettingsStore } from '../stores/settingsStore'
+import { publicAssetPath } from '../lib/publicAsset'
 
 type HeatmapDay = {
   date: string
@@ -57,6 +58,7 @@ const DEFAULT_PROFILE: DesktopProfilePreferences = {
   avatarFile: null,
   avatarUpdatedAt: null,
 }
+const DEFAULT_AVATAR_SRC = publicAssetPath('app-icon.png')
 
 function localDateKey(date: Date) {
   const year = date.getFullYear()
@@ -489,7 +491,7 @@ export function ActivitySettings() {
       detail: formatSessionCount(last30Usage.sessions, t),
     },
   ]
-  const avatarSrc = profile.avatarFile ? getProfileAvatarUrl(profile.avatarUpdatedAt) : '/app-icon.png'
+  const avatarSrc = profile.avatarFile ? getProfileAvatarUrl(profile.avatarUpdatedAt) : DEFAULT_AVATAR_SRC
   const avatarClassName = profile.avatarFile
     ? 'h-full w-full object-cover'
     : 'h-full w-full scale-[1.28] object-contain transition-transform'
@@ -568,7 +570,7 @@ export function ActivitySettings() {
             alt={`${profile.displayName} avatar`}
             className={avatarClassName}
             onError={(event) => {
-              event.currentTarget.src = '/app-icon.png'
+              event.currentTarget.src = DEFAULT_AVATAR_SRC
               event.currentTarget.className = 'h-full w-full scale-[1.28] object-contain transition-transform'
             }}
           />

@@ -62,6 +62,11 @@ describe('desktopNotifications', () => {
       configurable: true,
       value: 'Linux x86_64',
     })
+    Object.defineProperty(window, '__TAURI_INTERNALS__', {
+      configurable: true,
+      value: {},
+    })
+    Reflect.deleteProperty(window, 'desktopHost')
   })
 
   it('sends through the Tauri plugin when native notification permission is already granted', async () => {
@@ -286,6 +291,32 @@ describe('desktopNotifications', () => {
 
     expect(coreApiMock.invoke).toHaveBeenCalledWith('open_windows_notification_settings')
     expect(shellApiMock.open).not.toHaveBeenCalled()
+  })
+
+  it('opens macOS notification settings through the native command before shell fallback', async () => {
+    Object.defineProperty(navigator, 'platform', {
+      configurable: true,
+      value: 'MacIntel',
+    })
+    coreApiMock.invoke.mockResolvedValueOnce(true)
+
+    await expect(openDesktopNotificationSettings()).resolves.toBe(true)
+
+    expect(coreApiMock.invoke).toHaveBeenCalledWith('macos_open_notification_settings')
+    expect(shellApiMock.open).not.toHaveBeenCalled()
+  })
+
+  it('falls back to shell.open for macOS notification settings when native command is unavailable', async () => {
+    Object.defineProperty(navigator, 'platform', {
+      configurable: true,
+      value: 'MacIntel',
+    })
+    coreApiMock.invoke.mockRejectedValueOnce(new Error('unavailable'))
+
+    await expect(openDesktopNotificationSettings()).resolves.toBe(true)
+
+    expect(coreApiMock.invoke).toHaveBeenCalledWith('macos_open_notification_settings')
+    expect(shellApiMock.open).toHaveBeenCalledWith('x-apple.systempreferences:com.apple.preference.notifications')
   })
 
   it('reports and requests macOS notification permission through the native bridge', async () => {

@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   getMessages: vi.fn(),
   getGitInfo: vi.fn(),
   getSlashCommands: vi.fn(),
+  listAgents: vi.fn(),
   getRepositoryContext: vi.fn(),
   getRecentProjects: vi.fn(),
   search: vi.fn(),
@@ -34,6 +35,12 @@ vi.mock('../../api/sessions', () => ({
     getSlashCommands: mocks.getSlashCommands,
     getRepositoryContext: mocks.getRepositoryContext,
     getRecentProjects: mocks.getRecentProjects,
+  },
+}))
+
+vi.mock('../../api/agents', () => ({
+  agentsApi: {
+    list: mocks.listAgents,
   },
 }))
 
@@ -185,6 +192,7 @@ describe('ChatInput file mentions', () => {
     mocks.list.mockResolvedValue({ sessions: [], total: 0 })
     mocks.getMessages.mockResolvedValue({ messages: [] })
     mocks.getSlashCommands.mockResolvedValue({ commands: [] })
+    mocks.listAgents.mockResolvedValue({ activeAgents: [], allAgents: [] })
   })
 
   it('keeps unsent composer drafts isolated when switching between session tabs', async () => {
@@ -313,6 +321,72 @@ describe('ChatInput file mentions', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('textbox')).toHaveValue('keep this prompt while I inspect another tab')
+    })
+  })
+
+  it('appends a delayed browser screenshot without clearing an unsent draft after remount', async () => {
+    const { unmount } = render(<ChatInput compact />)
+
+    const input = screen.getByRole('textbox') as HTMLTextAreaElement
+    fireEvent.change(input, {
+      target: { value: 'draft written while the agent is still running', selectionStart: 44 },
+    })
+    expect(input.value).toBe('draft written while the agent is still running')
+
+    unmount()
+
+    act(() => {
+      useChatStore.getState().queueComposerPrefill(sessionId, {
+        text: '',
+        mode: 'append',
+        attachments: [{
+          type: 'image',
+          name: 'screenshot-full.png',
+          mimeType: 'image/png',
+          data: 'data:image/png;base64,DELAYED',
+        }],
+      })
+    })
+
+    render(<ChatInput compact />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('textbox')).toHaveValue('draft written while the agent is still running')
+      expect(screen.getByAltText('screenshot-full.png')).toBeInTheDocument()
+    })
+  })
+
+  it('does not replay a handled browser screenshot after the composer remounts', async () => {
+    const { unmount } = render(<ChatInput compact />)
+
+    act(() => {
+      useChatStore.getState().queueComposerPrefill(sessionId, {
+        text: '',
+        mode: 'append',
+        attachments: [{
+          type: 'image',
+          name: 'screenshot-full.png',
+          mimeType: 'image/png',
+          data: 'data:image/png;base64,OLD',
+        }],
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByAltText('screenshot-full.png')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByLabelText('Remove screenshot-full.png'))
+
+    await waitFor(() => {
+      expect(screen.queryByAltText('screenshot-full.png')).not.toBeInTheDocument()
+    })
+
+    unmount()
+    render(<ChatInput compact />)
+
+    await waitFor(() => {
+      expect(screen.queryByAltText('screenshot-full.png')).not.toBeInTheDocument()
     })
   })
 
@@ -989,5 +1063,36 @@ describe('ChatInput file mentions', () => {
         .filter((button) => button.textContent?.startsWith('/'))
       expect(commandButtons[0]).toHaveTextContent('/superpowers:brainstorming')
     })
+  })
+
+  it('offers active agents as slash entries that insert /agent with the selected type', async () => {
+    mocks.listAgents.mockResolvedValue({
+      activeAgents: [
+        {
+          agentType: 'debugger',
+          description: 'Debug failures',
+          modelDisplay: 'OPUS',
+          source: 'userSettings',
+          isActive: true,
+        },
+      ],
+      allAgents: [],
+    })
+
+    render(<ChatInput />)
+
+    await waitFor(() => {
+      expect(mocks.listAgents).toHaveBeenCalledWith('/repo')
+    })
+
+    const input = screen.getByRole('textbox') as HTMLTextAreaElement
+    fireEvent.change(input, {
+      target: { value: '/debug', selectionStart: 6 },
+    })
+
+    const agentOption = await screen.findByText('/agent debugger')
+    fireEvent.click(agentOption)
+
+    expect(input).toHaveValue('/agent debugger ')
   })
 })

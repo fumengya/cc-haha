@@ -510,10 +510,6 @@ describe('TabBar', () => {
       render(<TabBar />)
     })
 
-    await waitFor(() => {
-      expect(getCurrentWindowMock).toHaveBeenCalled()
-    })
-
     const scrollRegion = screen.getByTestId('tab-bar').querySelector('.overflow-x-hidden')
     expect(scrollRegion).toBeInTheDocument()
 
@@ -542,10 +538,6 @@ describe('TabBar', () => {
 
     await act(async () => {
       render(<TabBar />)
-    })
-
-    await waitFor(() => {
-      expect(getCurrentWindowMock).toHaveBeenCalled()
     })
 
     fireEvent.mouseDown(screen.getByText('Untitled Session'))

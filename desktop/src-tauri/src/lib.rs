@@ -222,6 +222,7 @@ mod webview_panel;
 const SERVER_STARTUP_LOG_LIMIT: usize = 80;
 const SERVER_BIND_HOST: &str = "0.0.0.0";
 const SERVER_CONTROL_HOST: &str = "127.0.0.1";
+const CLAUDE_CODE_POWERSHELL_PATH_ENV: &str = "CLAUDE_CODE_POWERSHELL_PATH";
 const MAIN_WINDOW_LABEL: &str = "main";
 const TRAY_SHOW_ID: &str = "tray_show";
 const TRAY_QUIT_ID: &str = "tray_quit";
@@ -1386,6 +1387,11 @@ fn resolved_terminal_shell(app: &AppHandle) -> Result<String, String> {
     Ok(override_shell.unwrap_or(system_default))
 }
 
+fn read_agent_powershell_path_override() -> Option<String> {
+    let configured = read_desktop_terminal_config();
+    resolve_agent_powershell_path_override(current_terminal_host_platform(), configured.as_ref())
+}
+
 fn current_terminal_host_platform() -> TerminalHostPlatform {
     #[cfg(target_os = "windows")]
     {
@@ -1429,6 +1435,42 @@ fn resolve_desktop_terminal_shell(
             Ok(Some(path.to_string()))
         }
         _ => Ok(None),
+    }
+}
+
+fn is_powershell_executable_path(path: &str) -> bool {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    let file_name = trimmed.rsplit(['/', '\\']).next().unwrap_or(trimmed);
+    let lowercase = file_name.to_ascii_lowercase();
+    let base = lowercase.strip_suffix(".exe").unwrap_or(&lowercase);
+    matches!(base, "pwsh" | "powershell")
+}
+
+fn resolve_agent_powershell_path_override(
+    platform: TerminalHostPlatform,
+    config: Option<&DesktopTerminalConfig>,
+) -> Option<String> {
+    if platform != TerminalHostPlatform::Windows {
+        return None;
+    }
+
+    let startup_shell = config?.startup_shell.as_deref()?.trim();
+    match startup_shell {
+        "pwsh" => Some("pwsh.exe".to_string()),
+        "powershell" => Some("powershell.exe".to_string()),
+        "custom" => {
+            let custom_path = config?.custom_shell_path.as_deref()?.trim();
+            if is_powershell_executable_path(custom_path) {
+                Some(custom_path.to_string())
+            } else {
+                None
+            }
+        }
+        _ => None,
     }
 }
 
@@ -1592,6 +1634,9 @@ fn start_server_sidecar(app: &AppHandle) -> Result<ServerRuntime, String> {
         .map_err(|err| format!("resolve sidecar: {err}"))?;
     for (key, value) in terminal_environment(&default_shell(None)) {
         sidecar = sidecar.env(key, value);
+    }
+    if let Some(powershell_path) = read_agent_powershell_path_override() {
+        sidecar = sidecar.env(CLAUDE_CODE_POWERSHELL_PATH_ENV, powershell_path);
     }
     // Pass through CLAUDE_CONFIG_DIR so the sidecar (Node.js) uses the same
     // portable config directory. Also set XDG_CACHE_HOME to redirect the
@@ -1920,12 +1965,11 @@ fn kill_windows_sidecars() {
 #[cfg(test)]
 mod tests {
     use super::{
-        decode_terminal_output, default_utf8_locale, ensure_utf8_locale,
-        dir_has_portable_data, has_meaningful_intersection, is_persistable_window_state,
-        normalize_terminal_bash_path, parse_env_block, resolve_desktop_terminal_shell,
-        resolve_terminal_cwd, run_notification_bridge,
-        select_h5_dist_dir, DesktopTerminalConfig, StoredWindowState, TerminalHostPlatform,
-        SERVER_BIND_HOST, SERVER_CONTROL_HOST,
+        decode_terminal_output, default_utf8_locale, dir_has_portable_data, ensure_utf8_locale,
+        has_meaningful_intersection, is_persistable_window_state, normalize_terminal_bash_path,
+        parse_env_block, resolve_agent_powershell_path_override, resolve_desktop_terminal_shell,
+        resolve_terminal_cwd, run_notification_bridge, select_h5_dist_dir, DesktopTerminalConfig,
+        StoredWindowState, TerminalHostPlatform, SERVER_BIND_HOST, SERVER_CONTROL_HOST,
     };
     use std::{collections::HashMap, fs};
 
@@ -2174,6 +2218,57 @@ mod tests {
             )
             .expect("custom resolution should succeed"),
             Some("/tmp/custom-shell".to_string())
+        );
+    }
+
+    #[test]
+    fn agent_powershell_override_uses_windows_power_shell_preferences() {
+        let pwsh = DesktopTerminalConfig {
+            startup_shell: Some("pwsh".to_string()),
+            custom_shell_path: None,
+        };
+        assert_eq!(
+            resolve_agent_powershell_path_override(TerminalHostPlatform::Windows, Some(&pwsh)),
+            Some("pwsh.exe".to_string())
+        );
+
+        let powershell = DesktopTerminalConfig {
+            startup_shell: Some("powershell".to_string()),
+            custom_shell_path: None,
+        };
+        assert_eq!(
+            resolve_agent_powershell_path_override(
+                TerminalHostPlatform::Windows,
+                Some(&powershell),
+            ),
+            Some("powershell.exe".to_string())
+        );
+    }
+
+    #[test]
+    fn agent_powershell_override_accepts_only_custom_power_shell_paths() {
+        let custom_pwsh = DesktopTerminalConfig {
+            startup_shell: Some("custom".to_string()),
+            custom_shell_path: Some(r"C:\Program Files\PowerShell\7\pwsh.exe".to_string()),
+        };
+        assert_eq!(
+            resolve_agent_powershell_path_override(
+                TerminalHostPlatform::Windows,
+                Some(&custom_pwsh),
+            ),
+            Some(r"C:\Program Files\PowerShell\7\pwsh.exe".to_string())
+        );
+
+        let custom_bash = DesktopTerminalConfig {
+            startup_shell: Some("custom".to_string()),
+            custom_shell_path: Some(r"C:\Program Files\Git\bin\bash.exe".to_string()),
+        };
+        assert_eq!(
+            resolve_agent_powershell_path_override(
+                TerminalHostPlatform::Windows,
+                Some(&custom_bash),
+            ),
+            None
         );
     }
 

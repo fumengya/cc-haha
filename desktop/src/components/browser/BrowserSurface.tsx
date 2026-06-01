@@ -101,7 +101,7 @@ export function BrowserSurface({ sessionId }: { sessionId: string }) {
           'border-transparent text-[var(--color-text-secondary)] hover:border-[var(--color-border)]',
           'hover:bg-[var(--color-surface-container-low)] hover:text-[var(--color-text-primary)]',
         ].join(' ')}
-        onClick={() => previewBridge.eval(`window.__PREVIEW_BRIDGE__?.handleHostRaw('{"v":1,"type":"capture","kind":"full"}')`)}
+        onClick={() => previewBridge.message({ v: 1, type: 'capture', kind: 'full' })}
       >
         <Camera size={16} />
       </button>
@@ -119,7 +119,7 @@ export function BrowserSurface({ sessionId }: { sessionId: string }) {
           const cur = useBrowserPanelStore.getState().bySession[sessionId]
           const next = !cur?.pickerActive
           store.setPicker(sessionId, next)
-          previewBridge.eval(`window.__PREVIEW_BRIDGE__?.handleHostRaw('{"v":1,"type":"${next ? 'enter-picker' : 'exit-picker'}"}')`)
+          previewBridge.message({ v: 1, type: next ? 'enter-picker' : 'exit-picker' })
         }}
       >
         <MousePointer2 size={16} />

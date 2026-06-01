@@ -7,6 +7,7 @@ import { OpenWithMenu } from '../common/OpenWithMenu'
 import { buildOpenWithItems, describeFileType, isPreviewableChangedFile, type OpenWithItem } from '../../lib/openWithItems'
 import { openWithContextForWorkspaceFile } from '../../lib/openWithContextForHref'
 import { getServerBaseUrl } from '../../lib/desktopRuntime'
+import { getDesktopHost } from '../../lib/desktopHost'
 import { useOpenTargetStore } from '../../stores/openTargetStore'
 import { useBrowserPanelStore } from '../../stores/browserPanelStore'
 import { useWorkspacePanelStore } from '../../stores/workspacePanelStore'
@@ -83,7 +84,7 @@ export function CurrentTurnChangeCard({
       })
       const items = buildOpenWithItems(ctx, targets, {
         openInAppBrowser: (url) => useBrowserPanelStore.getState().open(sessionId, url),
-        openSystem: (p) => { void import('@tauri-apps/plugin-shell').then((m) => m.open(p)).catch(() => {}) },
+        openSystem: (p) => { void getDesktopHost().shell.openPath(p).catch(() => {}) },
         openWorkspacePreview: (rel) => { void useWorkspacePanelStore.getState().openPreview(sessionId, rel, 'file') },
         openTarget: (id, abs) => { void useOpenTargetStore.getState().openTarget(id, abs) },
         t: (k, v) => t(k as TranslationKey, v),

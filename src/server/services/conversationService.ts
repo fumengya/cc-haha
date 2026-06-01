@@ -77,6 +77,8 @@ type SessionProcess = {
   outputDrain: Promise<void>
   sdkMessages: any[]
   initMessage: any | null
+  usesOfficialOAuth: boolean
+  officialOAuthToken: string | null
   pendingPermissionRequests: Map<
     string,
     {
@@ -261,6 +263,7 @@ export class ConversationService {
     // chdir 后落到正确目录。
     //
     const childEnv = await this.buildChildEnv(launchWorkDir, sdkUrl, options)
+    const usesOfficialOAuth = this.shouldMarkManagedOAuth(options?.providerId)
 
     let proc: ReturnType<typeof Bun.spawn>
     try {
@@ -308,6 +311,8 @@ export class ConversationService {
       outputDrain: Promise.resolve(),
       sdkMessages: [],
       initMessage: null,
+      usesOfficialOAuth,
+      officialOAuthToken: childEnv.CLAUDE_CODE_OAUTH_TOKEN ?? null,
       pendingPermissionRequests: new Map(),
     }
     this.sessions.set(sessionId, session)
@@ -412,6 +417,10 @@ export class ConversationService {
     content: string,
     attachments?: AttachmentRef[],
   ): Promise<boolean> {
+    const session = this.sessions.get(sessionId)
+    if (session) {
+      await this.refreshOfficialOAuthTokenBeforeTurn(sessionId, session)
+    }
     const userContent = await this.buildUserContent(content, sessionId, attachments)
     return this.sendSdkMessage(sessionId, {
       type: 'user',
@@ -1137,6 +1146,33 @@ export class ConversationService {
       )
     }
     return env
+  }
+
+  private async refreshOfficialOAuthTokenBeforeTurn(
+    sessionId: string,
+    session: SessionProcess,
+  ): Promise<void> {
+    if (!session.usesOfficialOAuth) return
+
+    let token: string | null = null
+    try {
+      const { hahaOAuthService } = await import('./hahaOAuthService.js')
+      token = await hahaOAuthService.ensureFreshAccessToken()
+    } catch (err) {
+      console.error(
+        '[conversationService] refresh official OAuth token before turn failed:',
+        err instanceof Error ? err.message : err,
+      )
+      return
+    }
+
+    if (!token || token === session.officialOAuthToken) return
+
+    session.officialOAuthToken = token
+    this.sendSdkMessage(sessionId, {
+      type: 'update_environment_variables',
+      variables: { CLAUDE_CODE_OAUTH_TOKEN: token },
+    })
   }
 
   private shouldStripInheritedProviderEnv(providerId?: string | null): boolean {

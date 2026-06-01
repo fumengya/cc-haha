@@ -2,6 +2,7 @@ import { feature } from 'bun:bundle';
 import type { ContentBlockParam, TextBlockParam } from '@anthropic-ai/sdk/resources';
 import { randomUUID } from 'crypto';
 import { setPromptId } from 'src/bootstrap/state.js';
+import { parseAgentCommandArgs } from 'src/commands/agent.js';
 import { builtInCommandNames, type Command, type CommandBase, findCommand, getCommand, getCommandName, hasCommand, type PromptCommand } from 'src/commands.js';
 import { NO_CONTENT_MESSAGE } from 'src/constants/messages.js';
 import type { SetToolJSXFn, ToolUseContext } from 'src/Tool.js';
@@ -61,6 +62,10 @@ const MCP_SETTLE_TIMEOUT_MS = 10_000;
  */
 async function executeForkedSlashCommand(command: CommandBase & PromptCommand, args: string, context: ProcessUserInputContext, precedingInputBlocks: ContentBlockParam[], setToolJSX: SetToolJSXFn, canUseTool: CanUseToolFn): Promise<SlashCommandResult> {
   const agentId = createAgentId();
+  const dynamicAgentCommand = command.name === 'agent' ? parseAgentCommandArgs(args) : null;
+  if (command.name === 'agent' && !dynamicAgentCommand) {
+    throw new MalformedCommandError('Usage: /agent <agent> <prompt>');
+  }
   const pluginMarketplace = command.pluginInfo ? parsePluginIdentifier(command.pluginInfo.repository).marketplace : undefined;
   logEvent('tengu_slash_command_forked', {
     command_name: command.name as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -78,7 +83,10 @@ async function executeForkedSlashCommand(command: CommandBase & PromptCommand, a
     modifiedGetAppState,
     baseAgent,
     promptMessages
-  } = await prepareForkedCommandContext(command, args, context);
+  } = await prepareForkedCommandContext(command, args, context, dynamicAgentCommand ? {
+    agentType: dynamicAgentCommand.agentType,
+    requireAgentType: true
+  } : undefined);
 
   // Merge skill's effort into the agent definition so runAgent applies it
   const agentDefinition = command.effort !== undefined ? {
@@ -739,6 +747,18 @@ async function getMessagesForSlashCommand(commandName: string, args: string, set
                   })
                 }), createUserInterruptionMessage({
                   toolUse: false
+                })],
+                shouldQuery: false,
+                command
+              };
+            }
+            if (e instanceof MalformedCommandError) {
+              return {
+                messages: [createUserMessage({
+                  content: prepareUserContent({
+                    inputString: e.message,
+                    precedingInputBlocks
+                  })
                 })],
                 shouldQuery: false,
                 command

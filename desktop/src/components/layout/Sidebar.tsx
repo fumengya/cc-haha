@@ -9,8 +9,13 @@ import { useTabStore, SETTINGS_TAB_ID, SCHEDULED_TAB_ID } from '../../stores/tab
 import { useChatStore } from '../../stores/chatStore'
 import { useOpenTargetStore } from '../../stores/openTargetStore'
 import { desktopUiPreferencesApi, type SidebarProjectPreferences } from '../../api/desktopUiPreferences'
+import { getDesktopHost } from '../../lib/desktopHost'
+import { publicAssetPath } from '../../lib/publicAsset'
 
-const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
+const desktopHost = getDesktopHost()
+const isDesktopRuntime = desktopHost.isDesktop
+const canUseNativeDialogs = desktopHost.capabilities.dialogs
+const canStartWindowDragging = desktopHost.capabilities.windowControls
 const isWindows = typeof navigator !== 'undefined' && /Win/.test(navigator.platform)
 const SESSION_LIST_AUTO_REFRESH_MS = 30_000
 const SESSION_LIST_FOCUS_REFRESH_MIN_MS = 5_000
@@ -345,7 +350,7 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
   const createSessionFromExistingFolder = useCallback(async () => {
     setProjectHeaderMenu(null)
     setProjectHeaderSubmenu(null)
-    if (!isTauri) {
+    if (!canUseNativeDialogs) {
       addToast({
         type: 'error',
         message: t('sidebar.chooseProjectFolderUnavailable'),
@@ -353,8 +358,7 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
       return
     }
     try {
-      const { open } = await import('@tauri-apps/plugin-dialog')
-      const selected = await open({
+      const selected = await getDesktopHost().dialogs.open({
         directory: true,
         multiple: false,
         title: t('sidebar.useExistingFolder'),
@@ -574,13 +578,8 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
   const startDraggingRef = useRef<(() => Promise<void>) | null>(null)
 
   useEffect(() => {
-    if (!isTauri) return
-    import('@tauri-apps/api/window')
-      .then(({ getCurrentWindow }) => {
-        const win = getCurrentWindow()
-        startDraggingRef.current = () => win.startDragging()
-      })
-      .catch(() => {})
+    if (!canStartWindowDragging) return
+    startDraggingRef.current = () => getDesktopHost().window.startDragging()
   }, [])
 
   const handleSidebarDrag = useCallback((e: React.MouseEvent) => {
@@ -617,10 +616,10 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
       data-state={expanded ? 'open' : 'closed'}
       aria-label="Sidebar"
     >
-      <div className={`px-3 pb-2 ${isTauri && !isWindows ? 'pt-[44px]' : 'pt-3'}`}>
+      <div className={`px-3 pb-2 ${isDesktopRuntime && !isWindows ? 'pt-[44px]' : 'pt-3'}`}>
         <div className={`flex ${expanded ? 'items-center justify-between gap-3' : 'flex-col items-center gap-2'}`}>
           <div className={`flex min-w-0 items-center ${expanded ? 'gap-2.5' : 'justify-center'}`}>
-            <img src="/app-icon.png" alt="" className="h-8 w-8 flex-shrink-0" />
+            <img src={publicAssetPath('app-icon.png')} alt="" className="h-8 w-8 flex-shrink-0" />
             <span
               className={`sidebar-copy ${expanded ? 'sidebar-copy--visible' : 'sidebar-copy--hidden'} text-[13px] font-semibold tracking-tight text-[var(--color-text-primary)]`}
               style={{ fontFamily: 'var(--font-headline)' }}

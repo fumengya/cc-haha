@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { browserHost } from '../lib/desktopHost/browserHost'
 
 const check = vi.fn()
 const relaunch = vi.fn()
@@ -26,6 +27,8 @@ describe('updateStore', () => {
       configurable: true,
       value: {},
     })
+    Reflect.deleteProperty(window, 'desktopHost')
+    Reflect.deleteProperty(window, '__TAURI__')
   })
 
   it('stores available update metadata after a successful check', async () => {
@@ -53,6 +56,56 @@ describe('updateStore', () => {
     expect(download).toHaveBeenCalledTimes(1)
     expect(useUpdateStore.getState().status).toBe('downloaded')
     expect(useUpdateStore.getState().shouldPrompt).toBe(true)
+  })
+
+  it('checks, installs, and relaunches through an injected desktop host', async () => {
+    Reflect.deleteProperty(window, '__TAURI_INTERNALS__')
+    const download = vi.fn(async (onEvent?: (event: unknown) => void) => {
+      onEvent?.({ event: 'Started', data: { contentLength: 100 } })
+      onEvent?.({ event: 'Progress', data: { chunkLength: 100 } })
+      onEvent?.({ event: 'Finished' })
+    })
+    const install = vi.fn().mockResolvedValue(undefined)
+    const checkUpdate = vi.fn().mockResolvedValue({
+      version: '0.4.0',
+      body: 'Electron host update',
+      download,
+      install,
+      close: vi.fn().mockResolvedValue(undefined),
+    })
+    const prepareInstall = vi.fn().mockResolvedValue(undefined)
+    const relaunchHost = vi.fn().mockResolvedValue(undefined)
+
+    window.desktopHost = {
+      ...browserHost,
+      kind: 'electron',
+      isDesktop: true,
+      capabilities: {
+        ...browserHost.capabilities,
+        updates: true,
+      },
+      updates: {
+        ...browserHost.updates,
+        check: checkUpdate,
+        prepareInstall,
+        relaunch: relaunchHost,
+      },
+    }
+
+    vi.resetModules()
+    const { useUpdateStore } = await import('./updateStore')
+
+    const result = await useUpdateStore.getState().checkForUpdates()
+    await useUpdateStore.getState().installUpdate()
+
+    expect(result?.version).toBe('0.4.0')
+    expect(checkUpdate).toHaveBeenCalledWith(undefined)
+    expect(download).toHaveBeenCalledTimes(1)
+    expect(prepareInstall).toHaveBeenCalledTimes(1)
+    expect(install).toHaveBeenCalledTimes(1)
+    expect(relaunchHost).toHaveBeenCalledTimes(1)
+    expect(invoke).not.toHaveBeenCalled()
+    expect(relaunch).not.toHaveBeenCalled()
   })
 
   it('does not show the global prompt while a background download is still running', async () => {
