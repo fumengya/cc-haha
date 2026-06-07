@@ -341,6 +341,12 @@ const flushTimerBySession = new Map<string, ReturnType<typeof setTimeout>>()
 const pendingToolInputDeltaBySession = new Map<string, string>()
 const toolInputFlushTimerBySession = new Map<string, ReturnType<typeof setTimeout>>()
 
+// One-shot guard: when the user clicks Stop, skip exactly the next auto-drain
+// of the message queue so the queue does not immediately flush. This lets the
+// user send a priority message that fires right away (session is idle). After
+// that message finishes, the queue resumes on the next idle as usual.
+const skipNextQueueDrain = new Set<string>()
+
 function consumePendingDelta(sessionId: string): string {
   const flushTimer = flushTimerBySession.get(sessionId)
   if (flushTimer) {
@@ -898,6 +904,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     clearPendingToolInputDelta(sessionId)
     clearPendingTaskToolUseIds(sessionId)
     clearPendingToolParentUseIds(sessionId)
+    skipNextQueueDrain.delete(sessionId)
     wsManager.disconnect(sessionId)
     set((s) => {
       const { [sessionId]: _, ...rest } = s.sessions
@@ -1083,6 +1090,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   drainMessageQueue: (sessionId) => {
     const session = get().sessions[sessionId]
     if (!session) return
+    // A user-initiated Stop sets a one-shot skip so this idle does not flush
+    // the queue. Consume it and bail; the queue resumes on the next idle.
+    if (skipNextQueueDrain.has(sessionId)) {
+      skipNextQueueDrain.delete(sessionId)
+      return
+    }
     // Only drain on a true idle turn boundary — never mid-stream, while a tool
     // is running, or while a permission prompt is pending.
     if (session.chatState !== 'idle') return
@@ -1142,6 +1155,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   stopGeneration: (sessionId) => {
     wsManager.send(sessionId, { type: 'stop_generation' })
+    // Skip the auto-drain triggered by the idle that this Stop produces, so the
+    // queue is not flushed. The next message the user sends fires immediately
+    // (session is idle); the queue resumes draining after that turn completes.
+    if ((get().sessions[sessionId]?.messageQueue?.length ?? 0) > 0) {
+      skipNextQueueDrain.add(sessionId)
+    }
     if (pendingDeltaBySession.has(sessionId)) {
       const text = consumePendingDelta(sessionId)
       set((s) => ({ sessions: updateSessionIn(s.sessions, sessionId, (sess) => ({ streamingText: sess.streamingText + text })) }))
