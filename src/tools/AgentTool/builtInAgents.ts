@@ -4,9 +4,16 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from '../../services/analytics/gr
 import { isEnvTruthy } from '../../utils/envUtils.js'
 import { CLAUDE_CODE_GUIDE_AGENT } from './built-in/claudeCodeGuideAgent.js'
 import { CODE_REVIEWER_AGENT } from './built-in/codeReviewerAgent.js'
+import { COMMIT_PR_AGENT } from './built-in/commitPrAgent.js'
+import { DEBUGGER_AGENT } from './built-in/debuggerAgent.js'
+import { DOCS_WRITER_AGENT } from './built-in/docsWriterAgent.js'
 import { EXPLORE_AGENT } from './built-in/exploreAgent.js'
 import { GENERAL_PURPOSE_AGENT } from './built-in/generalPurposeAgent.js'
+import { MIGRATION_AGENT } from './built-in/migrationAgent.js'
+import { PERFORMANCE_AGENT } from './built-in/performanceAgent.js'
 import { PLAN_AGENT } from './built-in/planAgent.js'
+import { REFACTOR_AGENT } from './built-in/refactorAgent.js'
+import { SECURITY_REVIEWER_AGENT } from './built-in/securityReviewerAgent.js'
 import { STATUSLINE_SETUP_AGENT } from './built-in/statuslineSetup.js'
 import { TEST_AUTHOR_AGENT } from './built-in/testAuthorAgent.js'
 import { VERIFICATION_AGENT } from './built-in/verificationAgent.js'
@@ -62,6 +69,13 @@ export function getBuiltInAgents(): AgentDefinition[] {
     STATUSLINE_SETUP_AGENT,
     TEST_AUTHOR_AGENT,
     CODE_REVIEWER_AGENT,
+    DEBUGGER_AGENT,
+    SECURITY_REVIEWER_AGENT,
+    REFACTOR_AGENT,
+    MIGRATION_AGENT,
+    DOCS_WRITER_AGENT,
+    PERFORMANCE_AGENT,
+    COMMIT_PR_AGENT,
   ]
 
   if (areExplorePlanAgentsEnabled()) {

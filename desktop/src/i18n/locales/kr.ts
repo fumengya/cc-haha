@@ -1136,6 +1136,7 @@ export const kr: Record<TranslationKey, string> = {
   'chat.slashCommands': '슬래시 명령',
   'chat.openSkills': '스킬',
   'chat.openPlugins': '플러그인',
+  'chat.questionDropped': 'AI가 질문하려 했지만 요청이 유효하지 않거나 답변하기 전에 취소되었습니다.',
   'chat.skillPicker.title': '삽입할 스킬 선택',
   'chat.skillPicker.empty': '현재 호출 가능한 스킬이 없습니다.',
   'chat.pluginPicker.title': '삽입할 플러그인 선택',

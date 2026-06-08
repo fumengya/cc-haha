@@ -1134,6 +1134,7 @@ export const en = {
   'chat.slashCommands': 'Slash commands',
   'chat.openSkills': 'Skills',
   'chat.openPlugins': 'Plugins',
+  'chat.questionDropped': 'Claude wanted to ask you a question, but the request was invalid or canceled before you could answer.',
   'chat.skillPicker.title': 'Pick a skill to insert',
   'chat.skillPicker.empty': 'No invocable skills are available right now.',
   'chat.pluginPicker.title': 'Pick a plugin to insert',

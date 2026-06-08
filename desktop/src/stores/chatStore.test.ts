@@ -1988,6 +1988,85 @@ describe('chatStore history mapping', () => {
     })
   })
 
+  it('surfaces a visible notice when an unanswered AskUserQuestion is cleared by turn end', () => {
+    useChatStore.setState({
+      sessions: {
+        [TEST_SESSION_ID]: makeSession({
+          chatState: 'permission_pending',
+          pendingPermission: {
+            requestId: 'perm-ask-x',
+            toolName: 'AskUserQuestion',
+            toolUseId: 'tool-ask-x',
+            input: { questions: [] },
+          },
+        }),
+      },
+    })
+
+    useChatStore.getState().handleServerMessage(TEST_SESSION_ID, {
+      type: 'message_complete',
+      usage: { input_tokens: 1, output_tokens: 1 },
+    })
+
+    const session = useChatStore.getState().sessions[TEST_SESSION_ID]
+    expect(session?.pendingPermission).toBeNull()
+    const lastMessage = session?.messages[session.messages.length - 1]
+    expect(lastMessage).toMatchObject({ type: 'system' })
+    expect((lastMessage as { content: string }).content.length).toBeGreaterThan(0)
+  })
+
+  it('surfaces the dropped-question notice on an error turn end too', () => {
+    useChatStore.setState({
+      sessions: {
+        [TEST_SESSION_ID]: makeSession({
+          chatState: 'permission_pending',
+          pendingPermission: {
+            requestId: 'perm-ask-y',
+            toolName: 'AskUserQuestion',
+            toolUseId: 'tool-ask-y',
+            input: { questions: [] },
+          },
+        }),
+      },
+    })
+
+    useChatStore.getState().handleServerMessage(TEST_SESSION_ID, {
+      type: 'error',
+      message: 'tool failed',
+      code: 'tool_error',
+    })
+
+    const messages = useChatStore.getState().sessions[TEST_SESSION_ID]?.messages ?? []
+    const types = messages.map((m) => m.type)
+    // The system notice is added before the error entry.
+    expect(types).toContain('system')
+    expect(types[types.length - 1]).toBe('error')
+  })
+
+  it('does not add the dropped-question notice for non-AskUserQuestion permissions', () => {
+    useChatStore.setState({
+      sessions: {
+        [TEST_SESSION_ID]: makeSession({
+          chatState: 'permission_pending',
+          pendingPermission: {
+            requestId: 'perm-bash',
+            toolName: 'Bash',
+            toolUseId: 'tool-bash',
+            input: {},
+          },
+        }),
+      },
+    })
+
+    useChatStore.getState().handleServerMessage(TEST_SESSION_ID, {
+      type: 'message_complete',
+      usage: { input_tokens: 1, output_tokens: 1 },
+    })
+
+    const messages = useChatStore.getState().sessions[TEST_SESSION_ID]?.messages ?? []
+    expect(messages.some((m) => m.type === 'system')).toBe(false)
+  })
+
   it('sends permission mode updates to the active session only', () => {
     useChatStore.getState().setSessionPermissionMode('nonexistent-session', 'acceptEdits')
     expect(sendMock).not.toHaveBeenCalled()

@@ -8,6 +8,7 @@ import { useSessionRuntimeStore } from './sessionRuntimeStore'
 import { useTabStore } from './tabStore'
 import { randomSpinnerVerb } from '../config/spinnerVerbs'
 import { notifyDesktop } from '../lib/desktopNotifications'
+import { t } from '../i18n'
 import { deriveSessionTitle, isPlaceholderSessionTitle } from '../lib/sessionTitle'
 import { AGENT_LIFECYCLE_TYPES } from '../types/team'
 import type { ComposerAttachment } from '../lib/composerAttachments'
@@ -259,6 +260,19 @@ const COMPACT_SUMMARY_CUTOFFS = [
 
 let msgCounter = 0
 const nextId = () => `msg-${++msgCounter}-${Date.now()}`
+
+// Builds a visible chat notice for when an AskUserQuestion prompt was cleared
+// by a turn-ending event (message_complete / error) before the user answered —
+// e.g. the model emitted a malformed AskUserQuestion call. Without this the
+// question card would just flash and vanish silently.
+function makeDroppedQuestionMessage(): UIMessage {
+  return {
+    id: nextId(),
+    type: 'system',
+    content: t('chat.questionDropped'),
+    timestamp: Date.now(),
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -1790,6 +1804,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           update(() => ({ streamingText: text }))
         }
         if (session.elapsedTimer) clearInterval(session.elapsedTimer)
+        // If an AskUserQuestion prompt was still pending (e.g. a malformed
+        // question call that errored out), surface a visible notice before the
+        // card is cleared so it does not vanish silently.
+        if (session.pendingPermission?.toolName === 'AskUserQuestion') {
+          update((s) => ({ messages: [...s.messages, makeDroppedQuestionMessage()] }))
+        }
         update(() => ({
           tokenUsage: msg.usage,
           chatState: 'idle',
@@ -1826,6 +1846,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             newMessages = appendAssistantTextMessage(newMessages, pendingText, Date.now())
           }
           newMessages = dropTailCompactingCompactSummary(newMessages)
+          if (s.pendingPermission?.toolName === 'AskUserQuestion') {
+            newMessages = [...newMessages, makeDroppedQuestionMessage()]
+          }
           newMessages = [
             ...newMessages,
             {

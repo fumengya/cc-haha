@@ -1136,6 +1136,7 @@ export const jp: Record<TranslationKey, string> = {
   'chat.slashCommands': 'スラッシュコマンド',
   'chat.openSkills': 'スキル',
   'chat.openPlugins': 'プラグイン',
+  'chat.questionDropped': 'AI が質問しようとしましたが、リクエストが無効か、回答する前にキャンセルされました。',
   'chat.skillPicker.title': '挿入するスキルを選択',
   'chat.skillPicker.empty': '現在呼び出せるスキルはありません。',
   'chat.pluginPicker.title': '挿入するプラグインを選択',

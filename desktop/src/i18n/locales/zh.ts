@@ -1136,6 +1136,7 @@ export const zh: Record<TranslationKey, string> = {
   'chat.slashCommands': '斜杠命令',
   'chat.openSkills': '技能',
   'chat.openPlugins': '插件',
+  'chat.questionDropped': 'AI 想向你提问，但该请求无效或已取消（你还没来得及作答）。',
   'chat.skillPicker.title': '选择技能插入',
   'chat.skillPicker.empty': '当前没有可调用的技能。',
   'chat.pluginPicker.title': '选择插件插入',

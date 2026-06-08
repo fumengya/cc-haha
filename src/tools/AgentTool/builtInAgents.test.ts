@@ -41,6 +41,13 @@ describe('built-in agents', () => {
     expect(agentTypes).toContain('verification')
     expect(agentTypes).toContain('test-author')
     expect(agentTypes).toContain('code-reviewer')
+    expect(agentTypes).toContain('debugger')
+    expect(agentTypes).toContain('security-reviewer')
+    expect(agentTypes).toContain('refactor')
+    expect(agentTypes).toContain('migration')
+    expect(agentTypes).toContain('docs-writer')
+    expect(agentTypes).toContain('performance')
+    expect(agentTypes).toContain('commit-pr')
     // game-developer is a project-level agent (.claude/agents), not a built-in.
     expect(agentTypes).not.toContain('game-developer')
   })
@@ -50,10 +57,17 @@ describe('built-in agents', () => {
 
     const agentTypes = getBuiltInAgents().map(agent => agent.agentType)
 
-    // test-author / code-reviewer live in the base array, so they ship even
-    // when other optional built-ins are toggled off.
+    // These live in the base array, so they ship even when other optional
+    // built-ins are toggled off.
     expect(agentTypes).toContain('test-author')
     expect(agentTypes).toContain('code-reviewer')
+    expect(agentTypes).toContain('debugger')
+    expect(agentTypes).toContain('security-reviewer')
+    expect(agentTypes).toContain('refactor')
+    expect(agentTypes).toContain('migration')
+    expect(agentTypes).toContain('docs-writer')
+    expect(agentTypes).toContain('performance')
+    expect(agentTypes).toContain('commit-pr')
   })
 
   test('preserves SDK opt-out in noninteractive sessions', () => {
