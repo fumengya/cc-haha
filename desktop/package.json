@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.5.5",
   "description": "Desktop coding agent workbench for Claude Code Haha.",
-  "homepage": "https://github.com/NanmiCoder/cc-haha",
+  "homepage": "https://github.com/706412584/cc-haha",
   "author": {
     "name": "NanmiCoder",
     "email": "relakkes@gmail.com"
@@ -72,7 +72,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "NanmiCoder",
+        "owner": "706412584",
         "repo": "cc-haha"
       }
     ]

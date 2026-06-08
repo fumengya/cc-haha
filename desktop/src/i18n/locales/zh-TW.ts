@@ -863,6 +863,8 @@ export const zh: Record<TranslationKey, string> = {
   'settings.about.feedback': '反饋問題',
   'settings.about.feedbackDesc': '遇到 Bug 或使用問題，前往 GitHub Issue 提交反饋',
   'settings.about.author': '作者',
+  'settings.about.forkMaintainer': 'Fork 維護者',
+  'settings.about.forkMaintainerHint': '本建置為社群 fork 版本',
   'settings.about.socialMedia': '社交媒體',
   'settings.about.updates': '應用更新',
   'settings.about.updatesDesc': '檢查 GitHub Releases，下載安裝包，並在安裝後自動重啟。',

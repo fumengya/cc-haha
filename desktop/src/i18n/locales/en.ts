@@ -861,6 +861,8 @@ export const en = {
   'settings.about.feedback': 'Report an Issue',
   'settings.about.feedbackDesc': 'Open a GitHub Issue for bugs or usage questions',
   'settings.about.author': 'Author',
+  'settings.about.forkMaintainer': 'Fork maintainer',
+  'settings.about.forkMaintainerHint': 'This build is a community fork',
   'settings.about.socialMedia': 'Social Media',
   'settings.about.updates': 'App Updates',
   'settings.about.updatesDesc': 'Check GitHub Releases, download the installer, and relaunch after install.',

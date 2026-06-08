@@ -863,6 +863,8 @@ export const kr: Record<TranslationKey, string> = {
   'settings.about.feedback': '문제 신고',
   'settings.about.feedbackDesc': '버그나 사용 관련 질문은 GitHub Issue를 작성하세요',
   'settings.about.author': '작성자',
+  'settings.about.forkMaintainer': 'Fork 관리자',
+  'settings.about.forkMaintainerHint': '이 빌드는 커뮤니티 fork 버전입니다',
   'settings.about.socialMedia': '소셜 미디어',
   'settings.about.updates': '앱 업데이트',
   'settings.about.updatesDesc': 'GitHub Releases를 확인하고 설치 관리자를 다운로드한 후 설치 후 다시 시작합니다.',

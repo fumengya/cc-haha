@@ -863,6 +863,8 @@ export const jp: Record<TranslationKey, string> = {
   'settings.about.feedback': '問題を報告',
   'settings.about.feedbackDesc': 'バグや使い方の質問について GitHub Issue を作成します',
   'settings.about.author': '作者',
+  'settings.about.forkMaintainer': 'Fork メンテナー',
+  'settings.about.forkMaintainerHint': 'このビルドはコミュニティ fork 版です',
   'settings.about.socialMedia': 'ソーシャルメディア',
   'settings.about.updates': 'アプリの更新',
   'settings.about.updatesDesc': 'GitHub Releases を確認し、インストーラーをダウンロードして、インストール後に再起動します。',
