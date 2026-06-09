@@ -109,6 +109,7 @@ function getUpdaterService() {
     },
   }, {
     updateConfigPath: !smokeUpdater && app.isPackaged ? path.join(process.resourcesPath, 'app-update.yml') : undefined,
+    currentVersion: app.getVersion(),
   })
   return updaterService
 }
