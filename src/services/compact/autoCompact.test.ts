@@ -3,6 +3,7 @@ import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import {
   getAutoCompactThreshold,
   getEffectiveContextWindowSize,
+  isContextExhausted,
   isIneffectiveCompaction,
   shouldThrottleAutoCompact,
   type AutoCompactTrackingState,
@@ -134,5 +135,24 @@ describe('方案1: isIneffectiveCompaction (recompaction-loop guard)', () => {
 
   test('treats an unknown post-compact size as effective (no false circuit-break)', () => {
     expect(isIneffectiveCompaction(makeCompactionResult(undefined), model)).toBe(false)
+  })
+})
+
+describe('方案3: isContextExhausted (suggest-new-session signal)', () => {
+  const model = 'deepseek-v4-pro'
+  const threshold = getAutoCompactThreshold(model)
+
+  test('signals exhaustion only once the circuit breaker has tripped AND context is still over', () => {
+    expect(isContextExhausted(makeTracking({ consecutiveFailures: 3 }), threshold + 1, model)).toBe(true)
+  })
+
+  test('does not signal while the circuit breaker has headroom', () => {
+    expect(isContextExhausted(makeTracking({ consecutiveFailures: 2 }), threshold + 1, model)).toBe(false)
+    expect(isContextExhausted(makeTracking({ consecutiveFailures: 0 }), threshold + 1, model)).toBe(false)
+    expect(isContextExhausted(undefined, threshold + 1, model)).toBe(false)
+  })
+
+  test('does not signal if the context has somehow dropped back under threshold', () => {
+    expect(isContextExhausted(makeTracking({ consecutiveFailures: 5 }), threshold - 1, model)).toBe(false)
   })
 })

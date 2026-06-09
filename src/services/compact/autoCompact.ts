@@ -276,6 +276,20 @@ export function isIneffectiveCompaction(
   return truePost >= getAutoCompactThreshold(model)
 }
 
+// 方案3 predicate (pure, exported for tests): the context is "exhausted" when
+// the auto-compaction circuit breaker has tripped (compaction keeps failing or
+// staying over threshold) AND the live token count is still at/over the
+// threshold. That's the signal to suggest a fresh session.
+export function isContextExhausted(
+  tracking: AutoCompactTrackingState | undefined,
+  tokenCount: number,
+  model: string,
+): boolean {
+  const circuitTripped =
+    (tracking?.consecutiveFailures ?? 0) >= MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES
+  return circuitTripped && tokenCount >= getAutoCompactThreshold(model)
+}
+
 export async function autoCompactIfNeeded(
   messages: Message[],
   toolUseContext: ToolUseContext,
@@ -287,6 +301,11 @@ export async function autoCompactIfNeeded(
   wasCompacted: boolean
   compactionResult?: CompactionResult
   consecutiveFailures?: number
+  // 方案3: set when auto-compaction has given up (circuit breaker tripped) yet
+  // the context is still over the threshold — i.e. compaction can no longer
+  // help. The query loop surfaces this so the desktop can suggest starting a
+  // fresh session (carrying the latest summary) instead of degrading silently.
+  contextExhausted?: boolean
 }> {
   if (isEnvTruthy(process.env.DISABLE_COMPACT)) {
     return { wasCompacted: false }
@@ -299,7 +318,13 @@ export async function autoCompactIfNeeded(
     tracking?.consecutiveFailures !== undefined &&
     tracking.consecutiveFailures >= MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES
   ) {
-    return { wasCompacted: false }
+    const model = toolUseContext.options.mainLoopModel
+    const tokenCount =
+      tokenCountWithEstimation(messages) - (snipTokensFreed ?? 0)
+    return {
+      wasCompacted: false,
+      contextExhausted: isContextExhausted(tracking, tokenCount, model),
+    }
   }
 
   const model = toolUseContext.options.mainLoopModel
