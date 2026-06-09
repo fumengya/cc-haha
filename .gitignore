@@ -46,6 +46,9 @@ desktop/brand-assets/
 !.claude/agents/
 !.claude/agents/**
 
+# Kiro IDE local config (steering, specs, hooks) — local only
+.kiro/
+
 # Superpowers plans & specs (local only)
 docs/superpowers/
 .superpowers/
@@ -89,3 +92,4 @@ runtime/__pycache__
 # Local AI assistant artifacts (graph, notes)
 CLAUDE.md
 graphify-out/
+.gitignore
