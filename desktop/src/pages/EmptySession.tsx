@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError } from '../api/client'
 import { agentsApi } from '../api/agents'
 import { skillsApi } from '../api/skills'
+import { projectsApi } from '../api/projects'
+import { wsManager } from '../api/websocket'
 import { useTranslation } from '../i18n'
 import { useSessionStore } from '../stores/sessionStore'
 import { useChatStore } from '../stores/chatStore'
@@ -627,15 +629,94 @@ export function EmptySession() {
               useTabStore.getState().openTab(sessionId, 'New Session')
               connectToSession(sessionId)
             }}
-            onApplyHandoff={(text) => {
-              setInput(text)
-              requestAnimationFrame(() => {
-                const el = textareaRef.current
-                if (!el) return
-                el.focus()
-                const len = el.value.length
-                el.setSelectionRange(len, len)
-              })
+            onAutoHandoff={async (previousSessionId, previousSessionTitle, fallbackText, setStage) => {
+              // 1. Resolve summary: tries cache first (fast), falls back to
+              //    LLM generation on miss. Returns null on any failure so
+              //    we can degrade to the zero-token textarea path without
+              //    surprising the user with errors.
+              setStage('reading-cache')
+              let summary = null
+              try {
+                const cached = await projectsApi.getSessionSummary(previousSessionId)
+                summary = cached.summary
+              } catch {
+                // GET error → fall through to generation path below.
+              }
+              if (!summary) {
+                setStage('generating-summary')
+                try {
+                  const fresh = await projectsApi.generateSessionSummary(previousSessionId)
+                  summary = fresh.summary
+                } catch {
+                  summary = null
+                }
+              }
+
+              if (!summary) {
+                // Provider down / generation failed → fall back to the old
+                // zero-token textarea-prefill path. User gets the visible
+                // hand-off paragraph and decides what to send.
+                setInput(fallbackText)
+                requestAnimationFrame(() => {
+                  const el = textareaRef.current
+                  if (!el) return
+                  el.focus()
+                  const len = el.value.length
+                  el.setSelectionRange(len, len)
+                })
+                return
+              }
+
+              setStage('starting-session')
+
+              // 2. Create the new session and connect.
+              try {
+                const sessionId = await createSession(
+                  workDir || undefined,
+                  selectedBranch
+                    ? { repository: { branch: selectedBranch, worktree: useWorktree }, permissionMode: draftPermissionMode }
+                    : { permissionMode: draftPermissionMode },
+                )
+                setActiveView('code')
+                useTabStore.getState().openTab(sessionId, 'New Session')
+                connectToSession(sessionId)
+
+                // Stash hand-off info on this new session so the chat
+                // header can render a "↗ continued from..." chip and the
+                // user knows the AI started with prior context.
+                useSessionRuntimeStore.getState().setHandoffInfo(sessionId, {
+                  previousSessionId,
+                  previousSessionTitle,
+                  approxTokens: Math.ceil(
+                    (summary.main.length + summary.recent.length) / 4,
+                  ),
+                  generatedAt: summary.generatedAt,
+                })
+
+                // 3. Stage the hand-off summary on this new session and
+                //    auto-send a short "continue" trigger message. The CLI
+                //    starts (or restarts) with --append-system-prompt
+                //    carrying the summary, so the AI begins with full
+                //    context without seeing a prefilled user message.
+                //
+                //    Race-condition note: wsManager.send tolerates a
+                //    not-yet-OPEN socket — it queues the message in
+                //    `pendingMessages` and flushes onopen. So this works
+                //    even when connectToSession() above hasn't completed
+                //    its WS upgrade yet. Don't change to gate on
+                //    isConnected() without re-checking that contract.
+                wsManager.send(sessionId, {
+                  type: 'set_handoff_summary',
+                  previousSessionId,
+                })
+                sendMessage(sessionId, t('empty.recentActivity.continueTriggerMessage'))
+                setInput('')
+              } catch (err) {
+                addToast({
+                  type: 'error',
+                  message: resolveCreateSessionErrorMessage(err, t),
+                })
+              }
             }}
           />
         )}
