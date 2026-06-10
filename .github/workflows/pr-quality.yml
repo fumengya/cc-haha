@@ -152,6 +152,10 @@ jobs:
         working-directory: desktop
         run: bun install
 
+      - name: Install adapter dependencies
+        working-directory: adapters
+        run: bun install
+
       - name: Run desktop native checks
         run: bun run check:native
 
