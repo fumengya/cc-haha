@@ -99,6 +99,10 @@ jobs:
       - name: Install root dependencies
         run: bun install
 
+      - name: Install adapter dependencies
+        working-directory: adapters
+        run: bun install
+
       - name: Run server checks
         run: bun run check:server
 
