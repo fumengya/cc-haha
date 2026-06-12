@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, act } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import {
   SoloCouncilPanel,
@@ -22,11 +22,18 @@ vi.mock('../../i18n', () => ({
       'soloCouncil.status.completed': 'Done',
       'soloCouncil.status.failed': 'Failed',
       'soloCouncil.status.stopped': 'Stopped',
+      'soloCouncil.status.standby': 'Standby',
       'soloCouncil.verdict.planReady': 'Plan ready',
       'soloCouncil.verdict.approve': 'Approve',
       'soloCouncil.verdict.changesNeeded': 'Changes needed',
       'soloCouncil.verdict.pending': 'Pending',
       'soloCouncil.debateActive': 'Debate active',
+      'soloCouncil.output.showFull': 'Show full output',
+      'soloCouncil.output.collapse': 'Collapse',
+      'soloCouncil.output.toggleLabel': 'Toggle full Solo Council output',
+      'soloCouncil.output.standby.planner': 'Standing by, ready to shape the implementation plan.',
+      'soloCouncil.output.standby.reviewer': 'Standing by, waiting to review the draft plan.',
+      'soloCouncil.output.standby.critic': 'Standing by, waiting to check risks and counterexamples.',
     }
     return translations[key] ?? key
   },
@@ -89,16 +96,16 @@ describe('SoloCouncilPanel helpers', () => {
         summary: 'new plan',
         updatedAt: 2,
       }),
-    }, {})
+    }, {}, [], false)
 
     expect(rows).toHaveLength(1)
-    expect(rows[0]?.task.taskId).toBe('newPlanner')
+    expect(rows[0]?.task?.taskId).toBe('newPlanner')
     expect(rows[0]?.text).toBe('new plan')
   })
 })
 
 describe('SoloCouncilPanel', () => {
-  it('renders nothing when there are no council tasks', () => {
+  it('renders standby role cards when there are no council tasks or messages', () => {
     useChatStore.setState({
       sessions: {
         s1: {
@@ -110,8 +117,212 @@ describe('SoloCouncilPanel', () => {
       },
     })
 
-    const { container } = render(<SoloCouncilPanel sessionId="s1" />)
-    expect(container).toBeEmptyDOMElement()
+    render(<SoloCouncilPanel sessionId="s1" />)
+
+    expect(screen.getByTestId('solo-council-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('solo-council-card-planner')).toHaveTextContent('Standby')
+    expect(screen.getByTestId('solo-council-card-planner')).toHaveTextContent('Standing by, ready to shape the implementation plan.')
+    expect(screen.getByTestId('solo-council-card-reviewer')).toHaveTextContent('Standing by, waiting to review the draft plan.')
+    expect(screen.getByTestId('solo-council-card-critic')).toHaveTextContent('Standing by, waiting to check risks and counterexamples.')
+  })
+
+  it('live background agent tasks override standby rows', () => {
+    useChatStore.setState({
+      sessions: {
+        s1: {
+          ...useChatStore.getState().getSession('s1'),
+          backgroundAgentTasks: {
+            planner: baseTask({
+              taskId: 'planner',
+              toolUseId: 'plannerTool',
+              status: 'completed',
+              description: '[Solo Council: Planner] propose',
+              summary: 'Live plan ready',
+            }),
+          },
+        },
+      },
+    })
+
+    render(<SoloCouncilPanel sessionId="s1" />)
+
+    expect(screen.getByTestId('solo-council-card-planner')).toHaveTextContent('Live plan ready')
+    expect(screen.getByTestId('solo-council-card-planner')).not.toHaveTextContent('Standing by')
+    expect(screen.getByTestId('solo-council-card-reviewer')).toHaveTextContent('Standby')
+    expect(screen.getByTestId('solo-council-card-critic')).toHaveTextContent('Standby')
+  })
+
+  it('renders fallback role cards from Solo background task messages', () => {
+    const reviewerTask = baseTask({
+      taskId: 'reviewer',
+      toolUseId: 'reviewerTool',
+      status: 'completed',
+      description: '[Solo Council: Reviewer] audit',
+      summary: 'Fallback review summary',
+    })
+    useChatStore.setState({
+      sessions: {
+        s1: {
+          ...useChatStore.getState().getSession('s1'),
+          backgroundAgentTasks: {},
+          messages: [
+            { id: 'm1', type: 'background_task', task: reviewerTask, timestamp: 10 },
+          ],
+        },
+      },
+    })
+
+    render(<SoloCouncilPanel sessionId="s1" />)
+
+    expect(screen.getByTestId('solo-council-card-reviewer')).toHaveTextContent('Fallback review summary')
+    expect(screen.getByTestId('solo-council-card-planner')).toHaveTextContent('Standby')
+    expect(screen.getByTestId('solo-council-card-critic')).toHaveTextContent('Standby')
+  })
+
+  it('joins notification by toolUseId for fallback rows', () => {
+    const criticTask = baseTask({
+      taskId: 'critic',
+      toolUseId: 'criticTool',
+      status: 'completed',
+      description: '[Solo Council: Critic] challenge',
+      summary: 'fallback summary',
+    })
+    useChatStore.setState({
+      sessions: {
+        s1: {
+          ...useChatStore.getState().getSession('s1'),
+          backgroundAgentTasks: {},
+          messages: [
+            { id: 'm1', type: 'background_task', task: criticTask, timestamp: 10 },
+          ],
+          agentTaskNotifications: {
+            criticTool: baseNotification({
+              taskId: 'critic',
+              toolUseId: 'criticTool',
+              result: 'Tool result wins. PLAN_REVIEW: CHANGES_NEEDED',
+              usage: { totalTokens: 1234, toolUses: 2 },
+            }),
+          },
+        },
+      },
+    })
+
+    render(<SoloCouncilPanel sessionId="s1" />)
+
+    expect(screen.getByTestId('solo-council-card-critic')).toHaveTextContent('Tool result wins')
+    expect(screen.getByTestId('solo-council-card-critic')).toHaveTextContent('Changes needed')
+    expect(screen.getByTestId('solo-council-card-critic')).toHaveTextContent('1,234 t')
+    expect(screen.getByTestId('solo-council-card-critic')).toHaveTextContent('2 tools')
+  })
+
+  it('does not duplicate a role when live task and fallback message both exist', () => {
+    const fallbackPlanner = baseTask({
+      taskId: 'fallbackPlanner',
+      toolUseId: 'fallbackTool',
+      status: 'completed',
+      description: '[Solo Council: Planner] fallback',
+      summary: 'Fallback plan',
+    })
+    useChatStore.setState({
+      sessions: {
+        s1: {
+          ...useChatStore.getState().getSession('s1'),
+          backgroundAgentTasks: {
+            planner: baseTask({
+              taskId: 'livePlanner',
+              toolUseId: 'liveTool',
+              status: 'completed',
+              description: '[Solo Council: Planner] live',
+              summary: 'Live plan wins',
+            }),
+          },
+          messages: [
+            { id: 'm1', type: 'background_task', task: fallbackPlanner, timestamp: 10 },
+          ],
+        },
+      },
+    })
+
+    render(<SoloCouncilPanel sessionId="s1" />)
+
+    expect(screen.getAllByTestId('solo-council-card-planner')).toHaveLength(1)
+    expect(screen.getByTestId('solo-council-card-planner')).toHaveTextContent('Live plan wins')
+    expect(screen.queryByText('Fallback plan')).not.toBeInTheDocument()
+  })
+
+  it('ignores non-Solo background task messages while standby fills missing roles', () => {
+    useChatStore.setState({
+      sessions: {
+        s1: {
+          ...useChatStore.getState().getSession('s1'),
+          backgroundAgentTasks: {},
+          messages: [
+            {
+              id: 'm1',
+              type: 'background_task',
+              task: baseTask({ description: 'ordinary agent task', summary: 'Should not render' }),
+              timestamp: 10,
+            },
+          ],
+        },
+      },
+    })
+
+    render(<SoloCouncilPanel sessionId="s1" />)
+
+    expect(screen.queryByText('Should not render')).not.toBeInTheDocument()
+    expect(screen.getByTestId('solo-council-card-planner')).toHaveTextContent('Standby')
+    expect(screen.getByTestId('solo-council-card-reviewer')).toHaveTextContent('Standby')
+    expect(screen.getByTestId('solo-council-card-critic')).toHaveTextContent('Standby')
+  })
+
+  it('keeps expanded output when the same task updatedAt changes', () => {
+    const longOutput = Array.from({ length: 20 }, (_, index) => `Planner line ${index + 1}`).join('\n')
+    const session = useChatStore.getState().getSession('s1')
+    useChatStore.setState({
+      sessions: {
+        s1: {
+          ...session,
+          backgroundAgentTasks: {
+            planner: baseTask({
+              taskId: 'planner',
+              toolUseId: 'plannerTool',
+              status: 'completed',
+              description: '[Solo Council: Planner] propose',
+              summary: longOutput,
+              updatedAt: 1,
+            }),
+          },
+        },
+      },
+    })
+
+    const { rerender } = render(<SoloCouncilPanel sessionId="s1" />)
+    fireEvent.click(screen.getByTestId('solo-council-toggle-planner'))
+
+    act(() => {
+      useChatStore.setState({
+        sessions: {
+          s1: {
+            ...session,
+            backgroundAgentTasks: {
+              planner: baseTask({
+                taskId: 'planner',
+                toolUseId: 'plannerTool',
+                status: 'completed',
+                description: '[Solo Council: Planner] propose',
+                summary: longOutput,
+                updatedAt: 2,
+              }),
+            },
+          },
+        },
+      })
+    })
+    rerender(<SoloCouncilPanel sessionId="s1" />)
+
+    expect(screen.getByTestId('solo-council-output-planner')).not.toHaveClass('line-clamp-3')
+    expect(screen.getByTestId('solo-council-toggle-planner')).toHaveAttribute('aria-expanded', 'true')
   })
 
   it('renders Planner, Reviewer, and Critic cards from council tasks', () => {
@@ -163,5 +374,127 @@ describe('SoloCouncilPanel', () => {
     expect(screen.getByTestId('solo-council-card-reviewer')).toHaveTextContent('Running')
     expect(screen.getByTestId('solo-council-card-critic')).toHaveTextContent('Changes needed')
     expect(screen.getByText('Debate active')).toBeInTheDocument()
+  })
+
+  it('renders short multiline output fully without a toggle or line clamp', () => {
+    const shortMultilineOutput = 'Line one\nLine two\nLine three\nLine four'
+    useChatStore.setState({
+      sessions: {
+        s1: {
+          ...useChatStore.getState().getSession('s1'),
+          backgroundAgentTasks: {
+            planner: baseTask({
+              taskId: 'planner',
+              toolUseId: 'plannerTool',
+              status: 'completed',
+              description: '[Solo Council: Planner] propose',
+              summary: shortMultilineOutput,
+            }),
+          },
+        },
+      },
+    })
+
+    render(<SoloCouncilPanel sessionId="s1" />)
+
+    const output = screen.getByTestId('solo-council-output-planner')
+    expect(output).toHaveTextContent('Line one')
+    expect(output).toHaveTextContent('Line two')
+    expect(output).toHaveTextContent('Line three')
+    expect(output).toHaveTextContent('Line four')
+    expect(output).not.toHaveClass('line-clamp-3')
+    expect(screen.queryByTestId('solo-council-toggle-planner')).not.toBeInTheDocument()
+  })
+
+  it('renders long output collapsed by default and toggles expanded state', () => {
+    const longOutput = Array.from({ length: 20 }, (_, index) => `Planner line ${index + 1}`).join('\n')
+    useChatStore.setState({
+      sessions: {
+        s1: {
+          ...useChatStore.getState().getSession('s1'),
+          backgroundAgentTasks: {
+            planner: baseTask({
+              taskId: 'planner',
+              toolUseId: 'plannerTool',
+              status: 'completed',
+              description: '[Solo Council: Planner] propose',
+              summary: longOutput,
+            }),
+          },
+        },
+      },
+    })
+
+    render(<SoloCouncilPanel sessionId="s1" />)
+
+    const output = screen.getByTestId('solo-council-output-planner')
+    const toggle = screen.getByTestId('solo-council-toggle-planner')
+
+    expect(output).toHaveClass('line-clamp-3')
+    expect(toggle).toHaveAttribute('type', 'button')
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(toggle).toHaveAttribute('aria-controls', 'solo-council-output-planner')
+    expect(toggle).toHaveTextContent('Show full output')
+
+    fireEvent.click(toggle)
+
+    expect(output).not.toHaveClass('line-clamp-3')
+    expect(output).toHaveClass('max-h-64', 'overflow-auto')
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(toggle).toHaveTextContent('Collapse')
+
+    fireEvent.click(toggle)
+
+    expect(output).toHaveClass('line-clamp-3')
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(toggle).toHaveTextContent('Show full output')
+  })
+
+  it('toggles long Planner, Reviewer, and Critic cards independently', () => {
+    const longOutput = (role: string) => Array.from({ length: 20 }, (_, index) => `${role} line ${index + 1}`).join('\n')
+    useChatStore.setState({
+      sessions: {
+        s1: {
+          ...useChatStore.getState().getSession('s1'),
+          backgroundAgentTasks: {
+            planner: baseTask({
+              taskId: 'planner',
+              toolUseId: 'plannerTool',
+              status: 'completed',
+              description: '[Solo Council: Planner] propose',
+              summary: longOutput('Planner'),
+              updatedAt: 1,
+            }),
+            reviewer: baseTask({
+              taskId: 'reviewer',
+              toolUseId: 'reviewerTool',
+              status: 'completed',
+              description: '[Solo Council: Reviewer] audit',
+              summary: longOutput('Reviewer'),
+              updatedAt: 2,
+            }),
+            critic: baseTask({
+              taskId: 'critic',
+              toolUseId: 'criticTool',
+              status: 'completed',
+              description: '[Solo Council: Critic] challenge',
+              summary: longOutput('Critic'),
+              updatedAt: 3,
+            }),
+          },
+        },
+      },
+    })
+
+    render(<SoloCouncilPanel sessionId="s1" />)
+
+    fireEvent.click(screen.getByTestId('solo-council-toggle-reviewer'))
+
+    expect(screen.getByTestId('solo-council-output-planner')).toHaveClass('line-clamp-3')
+    expect(screen.getByTestId('solo-council-output-reviewer')).not.toHaveClass('line-clamp-3')
+    expect(screen.getByTestId('solo-council-output-critic')).toHaveClass('line-clamp-3')
+    expect(screen.getByTestId('solo-council-toggle-planner')).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByTestId('solo-council-toggle-reviewer')).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByTestId('solo-council-toggle-critic')).toHaveAttribute('aria-expanded', 'false')
   })
 })
