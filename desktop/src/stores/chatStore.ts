@@ -89,6 +89,13 @@ export type PerSessionState = {
   } | null
   tokenUsage: TokenUsage
   /**
+   * Bumped each time a compact boundary arrives. The context usage indicator
+   * watches this to force an immediate re-read of the (now much smaller)
+   * context instead of waiting for the next API response (#743).
+   * Optional: legacy persisted sessions predate the field.
+   */
+  compactCount?: number
+  /**
    * Characters streamed by the assistant during the current turn (text,
    * thinking, tool input). ÷4 approximates output tokens for the streaming
    * indicator — same estimation the CLI spinner uses. Reset on each send.
@@ -127,6 +134,7 @@ const DEFAULT_SESSION_STATE: PerSessionState = {
   pendingPermission: null,
   pendingComputerUsePermission: null,
   tokenUsage: { input_tokens: 0, output_tokens: 0 },
+  compactCount: 0,
   streamingResponseChars: 0,
   elapsedSeconds: 0,
   statusVerb: '',
@@ -1923,6 +1931,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           update((session) => ({
             chatState: session.chatState === 'compacting' ? 'thinking' : session.chatState,
             statusVerb: session.chatState === 'compacting' ? '' : session.statusVerb,
+            compactCount: (session.compactCount ?? 0) + 1,
             messages: appendOrUpdateTailCompactSummary(
               session.messages,
               {

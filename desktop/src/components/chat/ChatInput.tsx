@@ -1276,6 +1276,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
                   runtimeSelectionKey={runtimeSelectionKey}
                   fallbackModelLabel={runtimeModelLabel}
                   compact={useCompactControls}
+                  refreshNonce={sessionState?.compactCount ?? 0}
                 />
               )}
               {!isMemberSession && activeTabId && (

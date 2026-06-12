@@ -2599,6 +2599,19 @@ describe('chatStore history mapping', () => {
         preTokens: 120000,
       },
     ])
+    // The context usage indicator watches this counter to force an
+    // immediate post-compact refresh (#743). The seeded session state above
+    // intentionally lacks compactCount (legacy persisted shape) — the bump
+    // must tolerate that.
+    expect(useChatStore.getState().sessions[TEST_SESSION_ID]?.compactCount).toBe(1)
+
+    useChatStore.getState().handleServerMessage(TEST_SESSION_ID, {
+      type: 'system_notification',
+      subtype: 'compact_boundary',
+      message: 'Context compacted',
+      data: { trigger: 'manual' },
+    })
+    expect(useChatStore.getState().sessions[TEST_SESSION_ID]?.compactCount).toBe(2)
   })
 
   it('attaches compact summary content to the latest compact card', () => {
