@@ -41,7 +41,7 @@ import {
   replaceSlashCommand,
   resolveSlashUiAction,
 } from '../components/chat/composerUtils'
-import type { AttachmentRef } from '../types/chat'
+import type { AttachmentRef, DisplayAttachmentRef } from '../types/chat'
 import type { PermissionMode } from '../types/settings'
 import type { SlashCommandOption } from '../components/chat/composerUtils'
 import { WelcomeTaskCards, type WelcomeTaskCard } from '../components/welcome/WelcomeTaskCards'
@@ -344,8 +344,16 @@ export function EmptySession() {
         data: attachment.data,
         mimeType: attachment.mimeType,
       }))
+      const displayAttachmentPayload: DisplayAttachmentRef[] = attachments.map((attachment) => ({
+        type: attachment.type,
+        name: attachment.name,
+        path: attachment.path,
+        data: attachment.data,
+        previewUrl: attachment.previewUrl,
+        mimeType: attachment.mimeType,
+      }))
       if (text || attachmentPayload.length > 0) {
-        sendMessage(sessionId, text, attachmentPayload)
+        sendMessage(sessionId, text, attachmentPayload, { displayAttachments: displayAttachmentPayload })
       }
       setInput('')
       setAttachments([])

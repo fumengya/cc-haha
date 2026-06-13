@@ -16,7 +16,7 @@ import { sessionsApi, type SessionGitInfo } from '../../api/sessions'
 import { agentsApi } from '../../api/agents'
 import { PermissionModeSelector } from '../controls/PermissionModeSelector'
 import { ModelSelector } from '../controls/ModelSelector'
-import type { AttachmentRef } from '../../types/chat'
+import type { AttachmentRef, DisplayAttachmentRef } from '../../types/chat'
 import { AttachmentGallery } from './AttachmentGallery'
 import { ComposerDropOverlay } from './ComposerDropOverlay'
 import { ProjectContextChip } from '../shared/ProjectContextChip'
@@ -682,6 +682,18 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
       note: attachment.note,
       quote: attachment.quote,
     }))
+    const visibleUploadAttachmentPayload: DisplayAttachmentRef[] = attachments.map((attachment) => ({
+      type: attachment.type,
+      name: attachment.name,
+      path: attachment.path,
+      data: attachment.data,
+      previewUrl: attachment.previewUrl,
+      mimeType: attachment.mimeType,
+      lineStart: attachment.lineStart,
+      lineEnd: attachment.lineEnd,
+      note: attachment.note,
+      quote: attachment.quote,
+    }))
     const workspaceAttachmentPayload: AttachmentRef[] = workspaceReferences
       .filter((reference) => reference.kind !== 'chat-selection')
       .map((reference) => ({
@@ -694,8 +706,8 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
         note: reference.note,
         quote: reference.quote,
       }))
-    const visibleAttachmentPayload: AttachmentRef[] = [
-      ...uploadAttachmentPayload,
+    const visibleAttachmentPayload: DisplayAttachmentRef[] = [
+      ...visibleUploadAttachmentPayload,
       ...workspaceReferences.map((reference) => ({
         type: 'file' as const,
         name: reference.name,
