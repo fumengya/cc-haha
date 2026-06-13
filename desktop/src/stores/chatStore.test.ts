@@ -1682,6 +1682,103 @@ describe('chatStore history mapping', () => {
     )
   })
 
+  it('keeps previewUrl on optimistic display attachments but strips it from websocket payload', () => {
+    useChatStore.setState({
+      sessions: {
+        [TEST_SESSION_ID]: makeSession({ chatState: 'idle' }),
+      },
+    })
+
+    useChatStore.getState().sendMessage(
+      TEST_SESSION_ID,
+      'look at this',
+      [{
+        type: 'image',
+        name: 'chart.png',
+        path: 'C:\\Users\\Ada\\Pictures\\chart.png',
+        previewUrl: 'http://127.0.0.1:3456/api/filesystem/file?path=C%3A%5CUsers%5CAda%5CPictures%5Cchart.png',
+        mimeType: 'image/png',
+      } as any],
+      {
+        displayAttachments: [{
+          type: 'image',
+          name: 'chart.png',
+          path: 'C:\\Users\\Ada\\Pictures\\chart.png',
+          previewUrl: 'http://127.0.0.1:3456/api/filesystem/file?path=C%3A%5CUsers%5CAda%5CPictures%5Cchart.png',
+          mimeType: 'image/png',
+        }],
+      },
+    )
+
+    const messages = useChatStore.getState().sessions[TEST_SESSION_ID]?.messages ?? []
+    expect(messages[0]).toMatchObject({
+      type: 'user_text',
+      attachments: [{
+        type: 'image',
+        name: 'chart.png',
+        path: 'C:\\Users\\Ada\\Pictures\\chart.png',
+        previewUrl: 'http://127.0.0.1:3456/api/filesystem/file?path=C%3A%5CUsers%5CAda%5CPictures%5Cchart.png',
+        mimeType: 'image/png',
+      }],
+    })
+    expect(sendMock).toHaveBeenCalledWith(
+      TEST_SESSION_ID,
+      {
+        type: 'user_message',
+        content: 'look at this',
+        attachments: [{
+          type: 'image',
+          name: 'chart.png',
+          path: 'C:\\Users\\Ada\\Pictures\\chart.png',
+          data: undefined,
+          mimeType: 'image/png',
+          isDirectory: undefined,
+          lineStart: undefined,
+          lineEnd: undefined,
+          note: undefined,
+          quote: undefined,
+        }],
+      },
+    )
+    expect(JSON.stringify(sendMock.mock.calls[0]?.[1])).not.toContain('previewUrl')
+  })
+
+  it('preserves queued display previewUrl while stripping it when the queue drains', () => {
+    useChatStore.setState({
+      sessions: {
+        [TEST_SESSION_ID]: makeSession({ chatState: 'thinking' }),
+      },
+    })
+
+    useChatStore.getState().enqueueMessage(
+      TEST_SESSION_ID,
+      'queued image',
+      [{ type: 'image', name: 'queued.png', path: '/tmp/queued.png', previewUrl: 'http://127.0.0.1:3456/api/filesystem/file?path=%2Ftmp%2Fqueued.png' } as any],
+      { displayAttachments: [{ type: 'image', name: 'queued.png', path: '/tmp/queued.png', previewUrl: 'http://127.0.0.1:3456/api/filesystem/file?path=%2Ftmp%2Fqueued.png' }] },
+    )
+
+    expect(useChatStore.getState().sessions[TEST_SESSION_ID]?.messageQueue?.[0]?.displayAttachments?.[0]).toMatchObject({
+      previewUrl: 'http://127.0.0.1:3456/api/filesystem/file?path=%2Ftmp%2Fqueued.png',
+    })
+
+    useChatStore.setState((state) => ({
+      sessions: {
+        ...state.sessions,
+        [TEST_SESSION_ID]: {
+          ...state.sessions[TEST_SESSION_ID]!,
+          chatState: 'idle',
+        },
+      },
+    }))
+    useChatStore.getState().drainMessageQueue(TEST_SESSION_ID)
+
+    expect(useChatStore.getState().sessions[TEST_SESSION_ID]?.messages[0]).toMatchObject({
+      type: 'user_text',
+      attachments: [{ previewUrl: 'http://127.0.0.1:3456/api/filesystem/file?path=%2Ftmp%2Fqueued.png' }],
+    })
+    expect(JSON.stringify(sendMock.mock.calls.at(-1)?.[1])).not.toContain('previewUrl')
+  })
+
   it('stores server-materialized attachment prefixes for rewind matching', () => {
     useChatStore.setState({
       sessions: {

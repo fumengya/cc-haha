@@ -41,11 +41,17 @@ export type AttachmentRef = {
   quote?: string
 }
 
+export type DisplayAttachmentRef = AttachmentRef & {
+  /** UI-only preview URL. Never send to the websocket/server/model payload. */
+  previewUrl?: string
+}
+
 export type UIAttachment = {
   type: 'file' | 'image'
   name: string
   path?: string
   data?: string
+  previewUrl?: string
   mimeType?: string
   isDirectory?: boolean
   lineStart?: number

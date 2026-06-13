@@ -1,3 +1,4 @@
+import { getApiUrl } from '../api/client'
 import { isDesktopRuntime } from './desktopRuntime'
 import { getDesktopHost } from './desktopHost'
 
@@ -16,8 +17,35 @@ export type ComposerAttachment = {
   quote?: string
 }
 
+const IMAGE_PATH_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp'])
+const IMAGE_PATH_MIME_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+}
+
 function nextAttachmentId() {
   return `att-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function getPathExtension(filePath: string): string {
+  const fileName = getFileNameFromPath(filePath)
+  const dotIndex = fileName.lastIndexOf('.')
+  return dotIndex >= 0 ? fileName.slice(dotIndex + 1).toLowerCase() : ''
+}
+
+export function isPreviewableImagePath(filePath: string): boolean {
+  return IMAGE_PATH_EXTENSIONS.has(getPathExtension(filePath))
+}
+
+export function getFilesystemPreviewUrl(filePath: string): string {
+  return getApiUrl(`/api/filesystem/file?path=${encodeURIComponent(filePath)}`)
+}
+
+function getImageMimeTypeForPath(filePath: string): string | undefined {
+  return IMAGE_PATH_MIME_TYPES[getPathExtension(filePath)]
 }
 
 export function getFileNameFromPath(filePath: string): string {
@@ -26,11 +54,14 @@ export function getFileNameFromPath(filePath: string): string {
 }
 
 export function pathToComposerAttachment(filePath: string): ComposerAttachment {
+  const isImage = isPreviewableImagePath(filePath)
   return {
     id: nextAttachmentId(),
     name: getFileNameFromPath(filePath),
-    type: 'file',
+    type: isImage ? 'image' : 'file',
     path: filePath,
+    mimeType: isImage ? getImageMimeTypeForPath(filePath) : undefined,
+    previewUrl: isImage ? getFilesystemPreviewUrl(filePath) : undefined,
   }
 }
 

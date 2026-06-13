@@ -27,6 +27,7 @@ import type {
   ChatState,
   ComputerUsePermissionRequest,
   ComputerUsePermissionResponse,
+  DisplayAttachmentRef,
   GoalEventAction,
   MemoryEventFile,
   UIAttachment,
@@ -63,7 +64,7 @@ export type QueuedMessage = {
   content: string
   attachments?: AttachmentRef[]
   displayContent?: string
-  displayAttachments?: AttachmentRef[]
+  displayAttachments?: DisplayAttachmentRef[]
   createdAt: number
 }
 
@@ -152,7 +153,7 @@ type ChatStore = {
     sessionId: string,
     content: string,
     attachments?: AttachmentRef[],
-    options?: { displayContent?: string; displayAttachments?: AttachmentRef[]; hideDisplayContent?: boolean },
+    options?: { displayContent?: string; displayAttachments?: DisplayAttachmentRef[]; hideDisplayContent?: boolean },
   ) => void
   respondToPermission: (
     sessionId: string,
@@ -191,7 +192,7 @@ type ChatStore = {
     sessionId: string,
     content: string,
     attachments?: AttachmentRef[],
-    options?: { displayContent?: string; displayAttachments?: AttachmentRef[] },
+    options?: { displayContent?: string; displayAttachments?: DisplayAttachmentRef[] },
   ) => void
   removeQueuedMessage: (sessionId: string, queuedId: string) => void
   updateQueuedMessage: (sessionId: string, queuedId: string, content: string) => void
@@ -1065,6 +1066,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         ? ''
         : options?.displayContent?.trim() || content.trim()
     const modelFacingContent = buildModelContent(content, attachments)
+    const serverAttachments = stripPreviewUrlsFromAttachments(attachments)
     const visibleAttachments = options?.displayAttachments ?? attachments
     const uiAttachments: UIAttachment[] | undefined =
       visibleAttachments && visibleAttachments.length > 0
@@ -1073,6 +1075,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             name: a.name || a.path || a.mimeType || a.type,
             path: a.path,
             data: a.data,
+            previewUrl: getDisplayAttachmentPreviewUrl(a),
             mimeType: a.mimeType,
             lineStart: a.lineStart,
             lineEnd: a.lineEnd,
@@ -1173,7 +1176,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     // 方案3: count this as a real user turn so rapid re-compaction (thrash)
     // can be told apart from compactions spread across genuine work.
     noteUserTurnForCompactionThrash(sessionId)
-    wsManager.send(sessionId, { type: 'user_message', content, attachments })
+    wsManager.send(sessionId, { type: 'user_message', content, attachments: serverAttachments })
   },
 
   enqueueMessage: (sessionId, content, attachments, options) => {
@@ -2284,6 +2287,28 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 }))
+
+function getDisplayAttachmentPreviewUrl(attachment: AttachmentRef | DisplayAttachmentRef): string | undefined {
+  return 'previewUrl' in attachment && typeof attachment.previewUrl === 'string'
+    ? attachment.previewUrl
+    : undefined
+}
+
+function stripPreviewUrlsFromAttachments(attachments?: AttachmentRef[]): AttachmentRef[] | undefined {
+  if (!attachments) return undefined
+  return attachments.map((attachment) => ({
+    type: attachment.type,
+    name: attachment.name,
+    path: attachment.path,
+    data: attachment.data,
+    mimeType: attachment.mimeType,
+    isDirectory: attachment.isDirectory,
+    lineStart: attachment.lineStart,
+    lineEnd: attachment.lineEnd,
+    note: attachment.note,
+    quote: attachment.quote,
+  }))
+}
 
 function updateOptimisticSessionTitle(sessionId: string, content: string): void {
   const title = deriveSessionTitle(content)
