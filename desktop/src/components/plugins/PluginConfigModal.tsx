@@ -35,9 +35,11 @@ export function PluginConfigModal({
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(false)
 
-  // Load existing values when modal opens
+  // Load existing values when modal opens (only on open transition)
+  const [wasOpen, setWasOpen] = useState(false)
   useEffect(() => {
-    if (!open) return
+    if (!open || wasOpen) return
+    setWasOpen(true)
     setFetching(true)
     pluginsApi
       .getOptions(pluginId)
@@ -50,7 +52,6 @@ export function PluginConfigModal({
         setValues(merged)
       })
       .catch(() => {
-        // Start with empty values on error
         const empty: Record<string, string> = {}
         for (const key of Object.keys(schema)) {
           empty[key] = ''
@@ -58,7 +59,14 @@ export function PluginConfigModal({
         setValues(empty)
       })
       .finally(() => setFetching(false))
-  }, [open, pluginId, schema])
+  }, [open, wasOpen, pluginId, schema])
+
+  // Reset wasOpen when modal closes
+  useEffect(() => {
+    if (!open && wasOpen) {
+      setWasOpen(false)
+    }
+  }, [open, wasOpen])
 
   const handleSave = async () => {
     setLoading(true)

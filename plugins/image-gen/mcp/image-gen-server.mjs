@@ -46,14 +46,7 @@ function loadProviders() {
   }
 
   if (providers.length === 0) {
-    providers.push({
-      name: 'Agnes (unconfigured)',
-      baseUrl: 'https://apihub.agnes-ai.com/v1',
-      apiKey: '',
-      model: 'agnes-image-2.1-flash',
-      enabled: true,
-      timeoutMs: 300_000,
-    })
+    return []
   }
 
   return providers
@@ -192,7 +185,7 @@ async function editWithFallback(prompt, imageUrl, size, n, transparent, provider
     const url = `${baseUrl}/images/edits`
     const timeoutMs = provider.timeoutMs || 600_000
 
-    // Fetch reference image as blob
+    // Fetch reference image as blob (with SSRF protection)
     let imageBlob
     try {
       if (imageUrl.startsWith('data:')) {
@@ -201,6 +194,23 @@ async function editWithFallback(prompt, imageUrl, size, n, transparent, provider
         const buf = Buffer.from(b64, 'base64')
         imageBlob = new Blob([buf], { type: mime })
       } else {
+        const parsed = new URL(imageUrl)
+        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+          throw new Error(`不允许的 URL 协议: ${parsed.protocol}。仅支持 http/https/data URL。`)
+        }
+        // Block private/link-local IP ranges
+        const hostname = parsed.hostname
+        if (
+          hostname === 'localhost' ||
+          hostname === '127.0.0.1' ||
+          hostname === '::1' ||
+          hostname.startsWith('169.254.') ||
+          hostname.startsWith('10.') ||
+          hostname.startsWith('192.168.') ||
+          /^172\.(1[6-9]|2\d|3[01])\./.test(hostname)
+        ) {
+          throw new Error(`不允许访问内网地址: ${hostname}`)
+        }
         const imgRes = await fetchWithTimeout(imageUrl, { method: 'GET' }, 30_000)
         if (!imgRes.ok) throw new Error(`下载参考图失败: HTTP ${imgRes.status}`)
         imageBlob = await imgRes.blob()
@@ -422,10 +432,14 @@ async function handleToolCall(name, args) {
 
   switch (name) {
     case 'generate_image': {
+      if (!args.prompt || typeof args.prompt !== 'string' || args.prompt.trim() === '') {
+        return { content: [{ type: 'text', text: 'Error: prompt is required and must be a non-empty string.' }], isError: true }
+      }
+      const n = Math.min(Math.max(Math.floor(Number(args.n) || 1), 1), 10)
       const result = await generateWithFallback(
-        args.prompt,
-        args.size,
-        args.n,
+        args.prompt.trim(),
+        args.size || '1024x1024',
+        n,
         args.transparent,
         providers,
       )
@@ -493,7 +507,7 @@ async function handleToolCall(name, args) {
 
 // ─── Stdio JSON-RPC transport ─────────────────────────────────────────────────
 
-let requestId = 0
+const MAX_BUFFER_SIZE = 1024 * 1024 // 1MB
 
 function sendResponse(id, result) {
   const msg = { jsonrpc: '2.0', id, result }
@@ -567,6 +581,11 @@ function main() {
 
   rl.on('line', (line) => {
     buffer += line
+    if (buffer.length > MAX_BUFFER_SIZE) {
+      console.error(`[image-gen] Buffer overflow (>1MB), resetting`)
+      buffer = ''
+      return
+    }
     try {
       const msg = JSON.parse(buffer)
       buffer = ''
