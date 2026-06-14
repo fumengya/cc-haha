@@ -164,7 +164,7 @@ describe('PluginConfigModal', () => {
         expect.objectContaining({ BASE_URL: 'https://custom.com' }),
       )
       // Verify API_KEY is not in the saved values
-      const savedValues = mockSaveOptions.mock.calls[0][1]
+      const savedValues = mockSaveOptions.mock.calls[0]![1] as Record<string, string>
       expect(savedValues).not.toHaveProperty('API_KEY')
     })
   })
@@ -192,7 +192,7 @@ describe('PluginConfigModal', () => {
     fireEvent.click(saveButton)
 
     await waitFor(() => {
-      const savedValues = mockSaveOptions.mock.calls[0][1]
+      const savedValues = mockSaveOptions.mock.calls[0]![1] as Record<string, string>
       expect(savedValues.API_KEY).toBe('sk-new-key')
     })
   })
