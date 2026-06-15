@@ -143,6 +143,32 @@ describe('chat blocks', () => {
     expect(container.textContent).not.toContain('"content"')
   })
 
+  it('formats and wraps pending Bash partial JSON input when expanded', () => {
+    const partialInput = [
+      '{"command":"cat << \'HTMLEOF\' > /tmp/index.html\\n<!DOCTYPE html>\\n<html lang=\\"zh-CN\\">",',
+      '"description":"Create HTML shell command"}',
+    ].join('')
+    const { container } = render(
+      <ToolCallBlock
+        toolName="Bash"
+        input={{ command: 'cat << \'HTMLEOF\' > /tmp/index.html', description: 'Create HTML shell command' }}
+        isPending
+        partialInput={partialInput}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button'))
+
+    expect(container.textContent).toContain('Partial input')
+    expect(container.textContent).toContain('json')
+    expect(container.textContent).toContain('4 lines')
+    expect(container.textContent).not.toContain('1 line')
+
+    const contentWrapper = container.querySelector('[data-code-viewer-content]') as HTMLElement | null
+    expect(contentWrapper?.style.whiteSpace).toBe('pre-wrap')
+    expect(contentWrapper?.style.wordBreak).toBe('break-word')
+  })
+
   it('shows non-windowed Writer preview stats before the 120-line limit', () => {
     const { container } = render(
       <ToolCallBlock

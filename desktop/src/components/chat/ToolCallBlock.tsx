@@ -577,14 +577,94 @@ function renderPartialInput(
   partialInput: string,
   t?: (key: TranslationKey, params?: Record<string, string | number>) => string,
 ) {
+  const formattedInput = formatPartialJsonInput(partialInput)
+
   return (
     <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
       <div className="border-b border-[var(--color-border)] px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-[var(--color-outline)]">
         {t?.('tool.partialInput') ?? 'Partial input'}
       </div>
-      <CodeViewer code={partialInput} language="json" maxLines={8} />
+      <CodeViewer code={formattedInput} language="json" maxLines={8} wrapLongLines />
     </div>
   )
+}
+
+function formatPartialJsonInput(source: string): string {
+  const trimmed = source.trim()
+  if (!trimmed) return source
+
+  try {
+    return JSON.stringify(JSON.parse(trimmed), null, 2)
+  } catch {
+    return formatJsonLikeInput(trimmed)
+  }
+}
+
+function formatJsonLikeInput(source: string): string {
+  let output = ''
+  let indent = 0
+  let inString = false
+  let escaping = false
+  let skipWhitespace = false
+
+  const newline = () => {
+    output = output.trimEnd()
+    output += `\n${'  '.repeat(indent)}`
+    skipWhitespace = true
+  }
+
+  for (const char of source) {
+    if (inString) {
+      output += char
+      if (escaping) {
+        escaping = false
+      } else if (char === '\\') {
+        escaping = true
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (skipWhitespace && /\s/.test(char)) continue
+    skipWhitespace = false
+
+    if (char === '"') {
+      inString = true
+      output += char
+      continue
+    }
+
+    if (char === '{' || char === '[') {
+      output += char
+      indent += 1
+      newline()
+      continue
+    }
+
+    if (char === '}' || char === ']') {
+      indent = Math.max(0, indent - 1)
+      if (!output.endsWith('\n')) newline()
+      output += char
+      continue
+    }
+
+    if (char === ',') {
+      output += char
+      newline()
+      continue
+    }
+
+    if (char === ':') {
+      output += ': '
+      skipWhitespace = true
+      continue
+    }
+
+    output += char
+  }
+
+  return output.trimEnd()
 }
 
 function getPendingSummary(
