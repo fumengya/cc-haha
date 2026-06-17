@@ -833,6 +833,14 @@ export const kr: Record<TranslationKey, string> = {
   'settings.skills.catalog.stripe-best-practices.desc': 'Stripe 통합에 맞는 API 선택(Checkout Sessions, Payment/Setup Intents, Connect Accounts v2, Billing, Treasury) 및 사용 중단 API 회피.',
   'settings.skills.catalog.supabase-best-practices.desc': 'Supabase의 Postgres 성능 및 모범 사례: 쿼리 성능, 연결 관리, RLS/보안, 스키마 설계, 잠금 및 진단.',
   'settings.skills.catalog.temporal-developer.desc': 'Python, TypeScript, Go, Java에서 Temporal 지속 워크플로 구축 및 디버깅: 아키텍처, 결정성/리플레이, CLI 설정, 핵심 패턴.',
+  'settings.skills.activation.title': '활성화 범위',
+  'settings.skills.activation.description': '활성화하면 이 스킬의 내용이 매 대화 시작 시 시스템 프롬프트에 자동 주입됩니다. 슬래시 명령이 필요 없습니다.',
+  'settings.skills.activation.off': '끄기',
+  'settings.skills.activation.offDesc': '/슬래시 명령으로만 수동 호출',
+  'settings.skills.activation.global': '글로벌',
+  'settings.skills.activation.globalDesc': '모든 프로젝트의 대화에서 자동 로드',
+  'settings.skills.activation.project': '프로젝트',
+  'settings.skills.activation.projectDesc': '현재 프로젝트의 대화에서만 자동 로드',
 
   // Settings > Memory
   'settings.tab.memory': '메모리',

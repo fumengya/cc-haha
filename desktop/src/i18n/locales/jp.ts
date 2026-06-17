@@ -833,6 +833,14 @@ export const jp: Record<TranslationKey, string> = {
   'settings.skills.catalog.stripe-best-practices.desc': 'Stripe 連携で適切な API を選択（Checkout Sessions、Payment/Setup Intents、Connect Accounts v2、Billing、Treasury）し、非推奨 API を回避。',
   'settings.skills.catalog.supabase-best-practices.desc': 'Supabase の Postgres パフォーマンスとベストプラクティス：クエリ性能、接続管理、RLS/セキュリティ、スキーマ設計、ロックと診断。',
   'settings.skills.catalog.temporal-developer.desc': 'Python・TypeScript・Go・Java で Temporal の永続ワークフローを構築・デバッグ：アーキテクチャ、決定性/リプレイ、CLI セットアップ、コアパターン。',
+  'settings.skills.activation.title': 'アクティベーション範囲',
+  'settings.skills.activation.description': 'アクティブにすると、このスキルの内容が毎回の会話開始時にシステムプロンプトへ自動注入されます。スラッシュコマンドは不要です。',
+  'settings.skills.activation.off': 'オフ',
+  'settings.skills.activation.offDesc': '/スラッシュコマンドで手動呼び出しのみ',
+  'settings.skills.activation.global': 'グローバル',
+  'settings.skills.activation.globalDesc': 'すべてのプロジェクトの会話で自動読み込み',
+  'settings.skills.activation.project': 'プロジェクト',
+  'settings.skills.activation.projectDesc': '現在のプロジェクトの会話でのみ自動読み込み',
 
   // Settings > Memory
   'settings.tab.memory': 'メモリ',

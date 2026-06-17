@@ -11,6 +11,7 @@ mock.module('../../utils/cwd.js', () => ({
 }))
 
 const mockFiles = new Set<string>()
+const mockDirs = new Map<string, string[]>()
 
 mock.module('fs/promises', () => ({
   access: async (filePath: string) => {
@@ -21,6 +22,10 @@ mock.module('fs/promises', () => ({
   mkdir: async () => {},
   writeFile: async (filePath: string) => {
     mockFiles.add(filePath)
+  },
+  readdir: async (dirPath: string, _opts?: unknown) => {
+    const files = mockDirs.get(dirPath) ?? []
+    return files.map(name => ({ name, isFile: () => true }))
   },
 }))
 
@@ -33,29 +38,36 @@ function makeReq(method: string, body?: unknown): Request {
   })
 }
 
+type RuleFile = { path: string; exists: boolean; type: string; label: string }
+
 describe('project-rules API', () => {
   beforeEach(() => {
     mockFiles.clear()
+    mockDirs.clear()
   })
 
-  it('GET /api/project-rules returns file paths with existence status', async () => {
+  it('GET /api/project-rules returns all file locations with existence status', async () => {
     const url = new URL('http://localhost/api/project-rules?cwd=/mock/project')
     const res = await handleProjectRulesApi(
       makeReq('GET'),
       url,
       ['api', 'project-rules'],
     )
-    const data = await res.json() as { projectFile: { path: string; exists: boolean }; userFile: { path: string; exists: boolean } }
+    const data = await res.json() as { files: RuleFile[]; cwd: string }
 
-    expect(data.projectFile.path).toContain('CLAUDE.md')
-    expect(data.projectFile.exists).toBe(false)
-    expect(data.userFile.path).toContain('CLAUDE.md')
-    expect(data.userFile.exists).toBe(false)
+    expect(data.cwd).toBe('/mock/project')
+    expect(data.files.length).toBeGreaterThanOrEqual(4)
+    // Should include root CLAUDE.md, .claude/CLAUDE.md, CLAUDE.local.md, user CLAUDE.md
+    const labels = data.files.map(f => f.label)
+    expect(labels).toContain('CLAUDE.md')
+    expect(labels).toContain('.claude/CLAUDE.md')
+    expect(labels).toContain('CLAUDE.local.md')
+    expect(labels).toContain('~/.claude/CLAUDE.md')
   })
 
-  it('GET /api/project-rules shows existing files', async () => {
-    const projectPath = path.join('/mock/project', '.claude', 'CLAUDE.md')
-    mockFiles.add(projectPath)
+  it('GET /api/project-rules shows existing files as exists=true', async () => {
+    const rootPath = path.join('/mock/project', 'CLAUDE.md')
+    mockFiles.add(rootPath)
 
     const url = new URL('http://localhost/api/project-rules?cwd=/mock/project')
     const res = await handleProjectRulesApi(
@@ -63,10 +75,27 @@ describe('project-rules API', () => {
       url,
       ['api', 'project-rules'],
     )
-    const data = await res.json() as { projectFile: { path: string; exists: boolean }; userFile: { path: string; exists: boolean } }
+    const data = await res.json() as { files: RuleFile[] }
 
-    expect(data.projectFile.exists).toBe(true)
-    expect(data.userFile.exists).toBe(false)
+    const rootFile = data.files.find(f => f.label === 'CLAUDE.md')
+    expect(rootFile?.exists).toBe(true)
+  })
+
+  it('GET /api/project-rules includes .claude/rules/ files', async () => {
+    const rulesDir = path.join('/mock/project', '.claude', 'rules')
+    mockDirs.set(rulesDir, ['codegraph.md', 'style.md'])
+
+    const url = new URL('http://localhost/api/project-rules?cwd=/mock/project')
+    const res = await handleProjectRulesApi(
+      makeReq('GET'),
+      url,
+      ['api', 'project-rules'],
+    )
+    const data = await res.json() as { files: RuleFile[] }
+
+    const ruleLabels = data.files.filter(f => f.label.startsWith('.claude/rules/')).map(f => f.label)
+    expect(ruleLabels).toContain('.claude/rules/codegraph.md')
+    expect(ruleLabels).toContain('.claude/rules/style.md')
   })
 
   it('POST /api/project-rules/create creates user file', async () => {
@@ -117,5 +146,22 @@ describe('project-rules API', () => {
 
     expect(data.ok).toBe(true)
     expect(data.created).toBe(false)
+  })
+
+  it('POST /api/project-rules/create project-root creates CLAUDE.md at project root', async () => {
+    const url = new URL('http://localhost/api/project-rules/create')
+    const res = await handleProjectRulesApi(
+      new Request('http://localhost/api/project-rules/create', {
+        method: 'POST',
+        body: JSON.stringify({ scope: 'project-root', cwd: '/mock/project' }),
+      }),
+      url,
+      ['api', 'project-rules', 'create'],
+    )
+    const data = await res.json() as { ok: boolean; created: boolean; path: string }
+
+    expect(data.ok).toBe(true)
+    expect(data.created).toBe(true)
+    expect(data.path).toBe(path.join('/mock/project', 'CLAUDE.md'))
   })
 })

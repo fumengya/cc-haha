@@ -1,10 +1,12 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, useEffect, type ReactNode } from 'react'
 import { useSkillStore } from '../../stores/skillStore'
 import { useTranslation } from '../../i18n'
 import { MarkdownRenderer } from '../markdown/MarkdownRenderer'
 import { CodeViewer } from '../chat/CodeViewer'
 import type { FileTreeNode, SkillFrontmatter } from '../../types/skill'
 import { useUIStore } from '../../stores/uiStore'
+import { skillsApi } from '../../api/skills'
+import { useSessionStore } from '../../stores/sessionStore'
 
 const META_PRIORITY = [
   'description',
@@ -146,6 +148,8 @@ export function SkillDetail() {
         </section>
       )}
 
+      <SkillActivationScope skillName={meta.name} />
+
       <section className="flex flex-1 min-h-0 min-w-0 overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
         <aside className="hidden w-[250px] flex-shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface-container-low)] lg:flex lg:flex-col">
           <div className="border-b border-[var(--color-border)] px-4 py-3">
@@ -235,6 +239,98 @@ export function SkillDetail() {
         </div>
       </section>
     </div>
+  )
+}
+
+type ActivationScope = 'off' | 'global' | 'project'
+
+function SkillActivationScope({ skillName }: { skillName: string }) {
+  const t = useTranslation()
+  const [globalSkills, setGlobalSkills] = useState<string[]>([])
+  const [projectSkills, setProjectSkills] = useState<string[]>([])
+  const [saving, setSaving] = useState(false)
+  const sessions = useSessionStore((s) => s.sessions)
+  const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const activeSession = sessions.find((s) => s.id === activeSessionId)
+  const cwd = activeSession?.workDir || activeSession?.projectPath || undefined
+
+  useEffect(() => {
+    skillsApi.getActiveSkills('global').then(res => setGlobalSkills(res.activeSkills)).catch(() => {})
+    skillsApi.getActiveSkills('project', cwd).then(res => setProjectSkills(res.activeSkills)).catch(() => {})
+  }, [cwd])
+
+  const currentScope: ActivationScope =
+    projectSkills.includes(skillName) ? 'project'
+    : globalSkills.includes(skillName) ? 'global'
+    : 'off'
+
+  const handleChange = async (scope: ActivationScope) => {
+    setSaving(true)
+    try {
+      // Remove from both first
+      const newGlobal = globalSkills.filter(s => s !== skillName)
+      const newProject = projectSkills.filter(s => s !== skillName)
+
+      if (scope === 'global') {
+        newGlobal.push(skillName)
+      } else if (scope === 'project') {
+        newProject.push(skillName)
+      }
+
+      await Promise.all([
+        skillsApi.setActiveSkills(newGlobal, 'global'),
+        skillsApi.setActiveSkills(newProject, 'project', cwd),
+      ])
+      setGlobalSkills(newGlobal)
+      setProjectSkills(newProject)
+    } catch {
+      // ignore
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const options: { value: ActivationScope; label: string; desc: string }[] = [
+    { value: 'off', label: t('settings.skills.activation.off'), desc: t('settings.skills.activation.offDesc') },
+    { value: 'global', label: t('settings.skills.activation.global'), desc: t('settings.skills.activation.globalDesc') },
+    { value: 'project', label: t('settings.skills.activation.project'), desc: t('settings.skills.activation.projectDesc') },
+  ]
+
+  return (
+    <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="material-symbols-outlined text-[18px] text-[var(--color-text-tertiary)]">
+          bolt
+        </span>
+        <h4 className="text-sm font-semibold text-[var(--color-text-primary)]">
+          {t('settings.skills.activation.title')}
+        </h4>
+        {saving && (
+          <span className="material-symbols-outlined animate-spin text-sm text-[var(--color-text-muted)]">progress_activity</span>
+        )}
+      </div>
+      <p className="text-xs text-[var(--color-text-secondary)] mb-3">
+        {t('settings.skills.activation.description')}
+      </p>
+      <div className="flex gap-2 flex-wrap">
+        {options.map(opt => (
+          <button
+            key={opt.value}
+            onClick={() => handleChange(opt.value)}
+            disabled={saving}
+            className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] ${
+              currentScope === opt.value
+                ? 'border-[var(--color-brand)] bg-[var(--color-primary-fixed)] text-[var(--color-text-primary)] font-medium'
+                : 'border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'
+            } disabled:opacity-50`}
+            title={opt.desc}
+          >
+            <span className={`w-2 h-2 rounded-full ${currentScope === opt.value ? 'bg-[var(--color-brand)]' : 'bg-[var(--color-text-muted)]'}`} />
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </section>
   )
 }
 

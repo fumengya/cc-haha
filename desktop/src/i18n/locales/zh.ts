@@ -835,6 +835,14 @@ export const zh: Record<TranslationKey, string> = {
   'settings.skills.catalog.stripe-best-practices.desc': '为 Stripe 集成选对 API（Checkout Sessions、Payment/Setup Intents、Connect Accounts v2、Billing、Treasury），并避开废弃 API。',
   'settings.skills.catalog.supabase-best-practices.desc': 'Supabase 的 Postgres 性能与最佳实践：查询性能、连接管理、RLS/安全、表结构设计、锁与诊断。',
   'settings.skills.catalog.temporal-developer.desc': '跨 Python、TypeScript、Go、Java 构建与调试 Temporal 持久化工作流：架构、确定性/重放、CLI 配置与核心模式。',
+  'settings.skills.activation.title': '激活范围',
+  'settings.skills.activation.description': '激活后，该技能内容会在每次对话开始时自动注入 system prompt，无需手动调用。',
+  'settings.skills.activation.off': '关闭',
+  'settings.skills.activation.offDesc': '仅通过 /斜杠命令 手动调用',
+  'settings.skills.activation.global': '全局',
+  'settings.skills.activation.globalDesc': '所有项目的每次对话都自动加载',
+  'settings.skills.activation.project': '项目',
+  'settings.skills.activation.projectDesc': '仅当前项目的对话自动加载',
 
   // Settings > Memory
   'settings.tab.memory': '记忆',

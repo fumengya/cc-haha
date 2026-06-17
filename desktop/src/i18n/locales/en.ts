@@ -833,6 +833,14 @@ export const en = {
   'settings.skills.catalog.stripe-best-practices.desc': 'Route Stripe integrations to the right API (Checkout Sessions, Payment/Setup Intents, Connect Accounts v2, Billing, Treasury) and avoid deprecated APIs.',
   'settings.skills.catalog.supabase-best-practices.desc': 'Postgres performance and best practices from Supabase across query performance, connections, RLS/security, schema design, locking, and diagnostics.',
   'settings.skills.catalog.temporal-developer.desc': 'Build and debug Temporal durable workflows across Python, TypeScript, Go, and Java: architecture, determinism/replay, CLI setup, and core patterns.',
+  'settings.skills.activation.title': 'Activation Scope',
+  'settings.skills.activation.description': 'When activated, this skill\'s content is automatically injected into the system prompt at the start of every conversation — no slash command needed.',
+  'settings.skills.activation.off': 'Off',
+  'settings.skills.activation.offDesc': 'Only invoked via /slash-command',
+  'settings.skills.activation.global': 'Global',
+  'settings.skills.activation.globalDesc': 'Auto-loaded in every conversation across all projects',
+  'settings.skills.activation.project': 'Project',
+  'settings.skills.activation.projectDesc': 'Auto-loaded only in conversations for the current project',
 
   // Settings > Memory
   'settings.tab.memory': 'Memory',
