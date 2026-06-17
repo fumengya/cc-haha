@@ -1,10 +1,11 @@
 /**
  * Project Rules (CLAUDE.md) REST API
  *
- * GET  /api/project-rules       — Get all CLAUDE.md file paths and existence status
- * POST /api/project-rules/create — Create a CLAUDE.md file if it doesn't exist
+ * GET  /api/project-rules         — List all known projects and their CLAUDE.md files
+ * POST /api/project-rules/create  — Create a CLAUDE.md file if it doesn't exist
  *
- * Scans the same locations the system actually loads:
+ * Scans ~/.claude/projects/ for all known project directories (same as memory),
+ * then checks each project for CLAUDE.md files at all valid locations:
  *  - Project root: CLAUDE.md, .claude/CLAUDE.md, .claude/rules/*.md, CLAUDE.local.md
  *  - User level: ~/.claude/CLAUDE.md, ~/.claude/rules/*.md
  */
@@ -13,12 +14,21 @@ import * as path from 'path'
 import * as fs from 'fs/promises'
 import { getClaudeConfigHomeDir } from '../../utils/envUtils.js'
 import { getCwd } from '../../utils/cwd.js'
+import { findCanonicalGitRoot } from '../../utils/git.js'
 
 type RuleFile = {
   path: string
   exists: boolean
   type: 'project' | 'user' | 'local'
   label: string
+}
+
+type ProjectRulesEntry = {
+  id: string
+  label: string
+  projectPath: string | null
+  isCurrent: boolean
+  files: RuleFile[]
 }
 
 export async function handleProjectRulesApi(
@@ -42,73 +52,94 @@ export async function handleProjectRulesApi(
   )
 }
 
+function getProjectsDir(): string {
+  return path.join(getClaudeConfigHomeDir(), 'projects')
+}
+
+function sanitizePath(p: string): string {
+  return p.replace(/[<>:"/\\|?*]/g, '-').replace(/^\.+/, '_')
+}
+
 async function getProjectRules(url: URL): Promise<Response> {
   const cwd = url.searchParams.get('cwd') || getCwd()
   const claudeHome = getClaudeConfigHomeDir()
+  const projectsDir = getProjectsDir()
 
-  const files: RuleFile[] = []
+  // Resolve current project ID
+  const currentProjectPath = findCanonicalGitRoot(cwd) ?? cwd
+  const currentProjectId = sanitizePath(currentProjectPath)
 
-  // Project root CLAUDE.md
-  const rootClaudeMd = path.join(cwd, 'CLAUDE.md')
-  files.push({
-    path: rootClaudeMd,
-    exists: await fileExists(rootClaudeMd),
-    type: 'project',
-    label: 'CLAUDE.md',
-  })
+  // Scan all known project directories
+  const projectMap = new Map<string, { id: string; isCurrent: boolean }>()
+  projectMap.set(currentProjectId, { id: currentProjectId, isCurrent: true })
 
-  // Project .claude/CLAUDE.md
-  const dotClaudeMd = path.join(cwd, '.claude', 'CLAUDE.md')
-  files.push({
-    path: dotClaudeMd,
-    exists: await fileExists(dotClaudeMd),
-    type: 'project',
-    label: '.claude/CLAUDE.md',
-  })
+  try {
+    const entries = await fs.readdir(projectsDir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      if (!projectMap.has(entry.name)) {
+        projectMap.set(entry.name, { id: entry.name, isCurrent: false })
+      }
+    }
+  } catch {
+    // projects dir may not exist
+  }
 
-  // Project .claude/rules/ directory
-  const rulesDir = path.join(cwd, '.claude', 'rules')
-  const ruleFiles = await listMdFiles(rulesDir)
-  for (const ruleFile of ruleFiles) {
-    files.push({
-      path: ruleFile,
-      exists: true,
-      type: 'project',
-      label: '.claude/rules/' + path.basename(ruleFile),
+  // For each project, try to resolve its real path and scan rules
+  const projects: ProjectRulesEntry[] = []
+
+  for (const [, { id, isCurrent }] of projectMap) {
+    const projectPath = isCurrent ? currentProjectPath : await inferProjectPath(id)
+    const files: RuleFile[] = []
+
+    if (projectPath) {
+      // Root CLAUDE.md
+      const rootMd = path.join(projectPath, 'CLAUDE.md')
+      files.push({ path: rootMd, exists: await fileExists(rootMd), type: 'project', label: 'CLAUDE.md' })
+
+      // .claude/CLAUDE.md
+      const dotClaudeMd = path.join(projectPath, '.claude', 'CLAUDE.md')
+      files.push({ path: dotClaudeMd, exists: await fileExists(dotClaudeMd), type: 'project', label: '.claude/CLAUDE.md' })
+
+      // .claude/rules/*.md
+      const rulesDir = path.join(projectPath, '.claude', 'rules')
+      for (const rulePath of await listMdFiles(rulesDir)) {
+        files.push({ path: rulePath, exists: true, type: 'project', label: '.claude/rules/' + path.basename(rulePath) })
+      }
+
+      // CLAUDE.local.md
+      const localMd = path.join(projectPath, 'CLAUDE.local.md')
+      files.push({ path: localMd, exists: await fileExists(localMd), type: 'local', label: 'CLAUDE.local.md' })
+    }
+
+    projects.push({
+      id,
+      label: projectPath ?? unsanitize(id),
+      projectPath,
+      isCurrent,
+      files,
     })
   }
 
-  // CLAUDE.local.md
-  const localMd = path.join(cwd, 'CLAUDE.local.md')
-  files.push({
-    path: localMd,
-    exists: await fileExists(localMd),
-    type: 'local',
-    label: 'CLAUDE.local.md',
-  })
-
-  // User ~/.claude/CLAUDE.md
-  const userClaudeMd = path.join(claudeHome, 'CLAUDE.md')
-  files.push({
-    path: userClaudeMd,
-    exists: await fileExists(userClaudeMd),
-    type: 'user',
-    label: '~/.claude/CLAUDE.md',
-  })
-
-  // User ~/.claude/rules/ directory
+  // User-level rules (shared across all projects)
+  const userFiles: RuleFile[] = []
+  const userMd = path.join(claudeHome, 'CLAUDE.md')
+  userFiles.push({ path: userMd, exists: await fileExists(userMd), type: 'user', label: '~/.claude/CLAUDE.md' })
   const userRulesDir = path.join(claudeHome, 'rules')
-  const userRuleFiles = await listMdFiles(userRulesDir)
-  for (const ruleFile of userRuleFiles) {
-    files.push({
-      path: ruleFile,
-      exists: true,
-      type: 'user',
-      label: '~/.claude/rules/' + path.basename(ruleFile),
-    })
+  for (const rulePath of await listMdFiles(userRulesDir)) {
+    userFiles.push({ path: rulePath, exists: true, type: 'user', label: '~/.claude/rules/' + path.basename(rulePath) })
   }
 
-  return Response.json({ files, cwd })
+  // Sort: current project first, then alphabetical
+  projects.sort((a, b) => {
+    if (a.isCurrent !== b.isCurrent) return a.isCurrent ? -1 : 1
+    return a.label.localeCompare(b.label)
+  })
+
+  // Filter out projects with no existing files and no resolvable path (unless current)
+  const filtered = projects.filter(p => p.isCurrent || p.projectPath !== null)
+
+  return Response.json({ projects: filtered, userFiles, cwd })
 }
 
 async function createProjectRulesFile(req: Request, url: URL): Promise<Response> {
@@ -140,21 +171,20 @@ async function createProjectRulesFile(req: Request, url: URL): Promise<Response>
     return Response.json({ error: 'Invalid scope' }, { status: 400 })
   }
 
-  // Don't overwrite existing files
   if (await fileExists(filePath)) {
     return Response.json({ ok: true, path: filePath, created: false })
   }
 
-  // Create directory if needed
   const dir = path.dirname(filePath)
   await fs.mkdir(dir, { recursive: true })
 
-  // Create file with template content
   const template = getTemplate(scope, filename)
   await fs.writeFile(filePath, template, 'utf-8')
 
   return Response.json({ ok: true, path: filePath, created: true })
 }
+
+// --- Helpers ---
 
 function getTemplate(scope: string, filename: string): string {
   if (scope === 'local') {
@@ -188,4 +218,52 @@ async function listMdFiles(dirPath: string): Promise<string[]> {
   } catch {
     return []
   }
+}
+
+function unsanitize(id: string): string {
+  // Best-effort reverse of sanitizePath for display
+  return id.replace(/-/g, path.sep)
+}
+
+async function inferProjectPath(projectId: string): Promise<string | null> {
+  // Try to read a session file from the project dir to find the real path
+  const projectDir = path.join(getProjectsDir(), projectId)
+  try {
+    const entries = await fs.readdir(projectDir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith('.jsonl')) continue
+      // Read first few bytes to find workDir
+      const filePath = path.join(projectDir, entry.name)
+      const content = await fs.readFile(filePath, { encoding: 'utf-8' })
+      const firstLine = content.split('\n')[0]
+      try {
+        const obj = JSON.parse(firstLine)
+        if (obj.cwd && typeof obj.cwd === 'string') {
+          // Verify the directory still exists
+          try {
+            await fs.access(obj.cwd)
+            return obj.cwd
+          } catch {
+            // Directory no longer exists
+          }
+        }
+      } catch {
+        // Not valid JSON
+      }
+      break // Only check first session file
+    }
+  } catch {
+    // Directory not readable
+  }
+
+  // Fallback: check if unsanitized path exists as a directory
+  const guessedPath = unsanitize(projectId)
+  try {
+    const stat = await fs.stat(guessedPath)
+    if (stat.isDirectory()) return guessedPath
+  } catch {
+    // nope
+  }
+
+  return null
 }

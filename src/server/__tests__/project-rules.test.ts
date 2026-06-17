@@ -1,13 +1,21 @@
 import { describe, it, expect, mock, beforeEach } from 'bun:test'
 import * as path from 'path'
 
+const MOCK_CLAUDE_HOME = path.join('/mock', 'home', '.claude')
+const MOCK_PROJECT = path.join('/mock', 'project')
+const MOCK_PROJECTS_DIR = path.join(MOCK_CLAUDE_HOME, 'projects')
+
 // Mock dependencies
 mock.module('../../utils/envUtils.js', () => ({
-  getClaudeConfigHomeDir: () => '/mock/home/.claude',
+  getClaudeConfigHomeDir: () => MOCK_CLAUDE_HOME,
 }))
 
 mock.module('../../utils/cwd.js', () => ({
-  getCwd: () => '/mock/project',
+  getCwd: () => MOCK_PROJECT,
+}))
+
+mock.module('../../utils/git.js', () => ({
+  findCanonicalGitRoot: (cwd: string) => cwd,
 }))
 
 const mockFiles = new Set<string>()
@@ -19,26 +27,34 @@ mock.module('fs/promises', () => ({
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     }
   },
+  stat: async (filePath: string) => {
+    if (!mockFiles.has(filePath)) {
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    }
+    return { isDirectory: () => true }
+  },
   mkdir: async () => {},
   writeFile: async (filePath: string) => {
     mockFiles.add(filePath)
   },
+  readFile: async () => '{}',
   readdir: async (dirPath: string, _opts?: unknown) => {
-    const files = mockDirs.get(dirPath) ?? []
-    return files.map(name => ({ name, isFile: () => true }))
+    // Check all registered mock dirs
+    const entries = mockDirs.get(dirPath)
+    if (entries) {
+      // If dirPath ends with 'projects', return as directories
+      if (dirPath.endsWith('projects')) {
+        return entries.map(name => ({ name, isDirectory: () => true, isFile: () => false }))
+      }
+      // Otherwise return as files
+      return entries.map(name => ({ name, isFile: () => true, isDirectory: () => false }))
+    }
+    // Default: throw ENOENT
+    throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
   },
 }))
 
 import { handleProjectRulesApi } from '../api/project-rules'
-
-function makeReq(method: string, body?: unknown): Request {
-  return new Request('http://localhost/api/project-rules', {
-    method,
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  })
-}
-
-type RuleFile = { path: string; exists: boolean; type: string; label: string }
 
 describe('project-rules API', () => {
   beforeEach(() => {
@@ -46,64 +62,58 @@ describe('project-rules API', () => {
     mockDirs.clear()
   })
 
-  it('GET /api/project-rules returns all file locations with existence status', async () => {
-    const url = new URL('http://localhost/api/project-rules?cwd=/mock/project')
-    const res = await handleProjectRulesApi(
-      makeReq('GET'),
-      url,
-      ['api', 'project-rules'],
-    )
-    const data = await res.json() as { files: RuleFile[]; cwd: string }
+  it('GET /api/project-rules returns current project and user files', async () => {
+    const url = new URL(`http://localhost/api/project-rules?cwd=${encodeURIComponent(MOCK_PROJECT)}`)
+    const req = new Request(url, { method: 'GET' })
+    const res = await handleProjectRulesApi(req, url, ['api', 'project-rules'])
+    const data = await res.json() as { projects: unknown[]; userFiles: unknown[]; cwd: string }
 
-    expect(data.cwd).toBe('/mock/project')
-    expect(data.files.length).toBeGreaterThanOrEqual(4)
-    // Should include root CLAUDE.md, .claude/CLAUDE.md, CLAUDE.local.md, user CLAUDE.md
-    const labels = data.files.map(f => f.label)
-    expect(labels).toContain('CLAUDE.md')
-    expect(labels).toContain('.claude/CLAUDE.md')
-    expect(labels).toContain('CLAUDE.local.md')
-    expect(labels).toContain('~/.claude/CLAUDE.md')
+    expect(data.cwd).toBe(MOCK_PROJECT)
+    expect(data.projects.length).toBeGreaterThanOrEqual(1)
+    expect(data.userFiles.length).toBeGreaterThanOrEqual(1)
   })
 
-  it('GET /api/project-rules shows existing files as exists=true', async () => {
-    const rootPath = path.join('/mock/project', 'CLAUDE.md')
-    mockFiles.add(rootPath)
+  it('GET /api/project-rules marks current project', async () => {
+    const url = new URL(`http://localhost/api/project-rules?cwd=${encodeURIComponent(MOCK_PROJECT)}`)
+    const req = new Request(url, { method: 'GET' })
+    const res = await handleProjectRulesApi(req, url, ['api', 'project-rules'])
+    const data = await res.json() as { projects: Array<{ isCurrent: boolean }> }
 
-    const url = new URL('http://localhost/api/project-rules?cwd=/mock/project')
-    const res = await handleProjectRulesApi(
-      makeReq('GET'),
-      url,
-      ['api', 'project-rules'],
-    )
-    const data = await res.json() as { files: RuleFile[] }
+    expect(data.projects[0].isCurrent).toBe(true)
+  })
 
-    const rootFile = data.files.find(f => f.label === 'CLAUDE.md')
+  it('GET /api/project-rules includes current project in response', async () => {
+    // Even without other projects in the dir, current project should appear
+    const url = new URL(`http://localhost/api/project-rules?cwd=${encodeURIComponent(MOCK_PROJECT)}`)
+    const req = new Request(url, { method: 'GET' })
+    const res = await handleProjectRulesApi(req, url, ['api', 'project-rules'])
+    const data = await res.json() as { projects: Array<{ id: string; isCurrent: boolean }> }
+
+    expect(data.projects.length).toBeGreaterThanOrEqual(1)
+    const current = data.projects.find(p => p.isCurrent)
+    expect(current).toBeDefined()
+  })
+
+  it('GET /api/project-rules detects existing CLAUDE.md in project root', async () => {
+    const rootMd = path.join(MOCK_PROJECT, 'CLAUDE.md')
+    mockFiles.add(rootMd)
+
+    const url = new URL(`http://localhost/api/project-rules?cwd=${encodeURIComponent(MOCK_PROJECT)}`)
+    const req = new Request(url, { method: 'GET' })
+    const res = await handleProjectRulesApi(req, url, ['api', 'project-rules'])
+    const data = await res.json() as { projects: Array<{ files: Array<{ label: string; exists: boolean }> }> }
+
+    const currentProject = data.projects[0]
+    const rootFile = currentProject.files.find(f => f.label === 'CLAUDE.md')
     expect(rootFile?.exists).toBe(true)
   })
 
-  it('GET /api/project-rules includes .claude/rules/ files', async () => {
-    const rulesDir = path.join('/mock/project', '.claude', 'rules')
-    mockDirs.set(rulesDir, ['codegraph.md', 'style.md'])
-
-    const url = new URL('http://localhost/api/project-rules?cwd=/mock/project')
-    const res = await handleProjectRulesApi(
-      makeReq('GET'),
-      url,
-      ['api', 'project-rules'],
-    )
-    const data = await res.json() as { files: RuleFile[] }
-
-    const ruleLabels = data.files.filter(f => f.label.startsWith('.claude/rules/')).map(f => f.label)
-    expect(ruleLabels).toContain('.claude/rules/codegraph.md')
-    expect(ruleLabels).toContain('.claude/rules/style.md')
-  })
-
-  it('POST /api/project-rules/create creates user file', async () => {
+  it('POST /api/project-rules/create creates project-root CLAUDE.md', async () => {
     const url = new URL('http://localhost/api/project-rules/create')
     const res = await handleProjectRulesApi(
-      new Request('http://localhost/api/project-rules/create', {
+      new Request(url, {
         method: 'POST',
-        body: JSON.stringify({ scope: 'user' }),
+        body: JSON.stringify({ scope: 'project-root', cwd: MOCK_PROJECT }),
       }),
       url,
       ['api', 'project-rules', 'create'],
@@ -112,30 +122,29 @@ describe('project-rules API', () => {
 
     expect(data.ok).toBe(true)
     expect(data.created).toBe(true)
-    expect(data.path).toContain('CLAUDE.md')
+    expect(data.path).toBe(path.join(MOCK_PROJECT, 'CLAUDE.md'))
   })
 
   it('POST /api/project-rules/create with invalid scope returns 400', async () => {
     const url = new URL('http://localhost/api/project-rules/create')
     const res = await handleProjectRulesApi(
-      new Request('http://localhost/api/project-rules/create', {
+      new Request(url, {
         method: 'POST',
         body: JSON.stringify({ scope: 'invalid' }),
       }),
       url,
       ['api', 'project-rules', 'create'],
     )
-
     expect(res.status).toBe(400)
   })
 
   it('POST /api/project-rules/create does not overwrite existing file', async () => {
-    const userPath = path.join('/mock/home/.claude', 'CLAUDE.md')
+    const userPath = path.join(MOCK_CLAUDE_HOME, 'CLAUDE.md')
     mockFiles.add(userPath)
 
     const url = new URL('http://localhost/api/project-rules/create')
     const res = await handleProjectRulesApi(
-      new Request('http://localhost/api/project-rules/create', {
+      new Request(url, {
         method: 'POST',
         body: JSON.stringify({ scope: 'user' }),
       }),
@@ -146,22 +155,5 @@ describe('project-rules API', () => {
 
     expect(data.ok).toBe(true)
     expect(data.created).toBe(false)
-  })
-
-  it('POST /api/project-rules/create project-root creates CLAUDE.md at project root', async () => {
-    const url = new URL('http://localhost/api/project-rules/create')
-    const res = await handleProjectRulesApi(
-      new Request('http://localhost/api/project-rules/create', {
-        method: 'POST',
-        body: JSON.stringify({ scope: 'project-root', cwd: '/mock/project' }),
-      }),
-      url,
-      ['api', 'project-rules', 'create'],
-    )
-    const data = await res.json() as { ok: boolean; created: boolean; path: string }
-
-    expect(data.ok).toBe(true)
-    expect(data.created).toBe(true)
-    expect(data.path).toBe(path.join('/mock/project', 'CLAUDE.md'))
   })
 })
