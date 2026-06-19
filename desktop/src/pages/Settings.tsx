@@ -1895,7 +1895,10 @@ function ProviderFormModal({ open, onClose, mode, provider, presets }: ProviderF
           </div>
         )}
 
-        <label
+        {/* ToolSearch toggle hidden: third-party providers don't support
+            the beta header and forcing it causes tool_use format degradation.
+            CLI auto-detects first-party hosts via toolSearch.ts. */}
+        {false && <label
           className={`relative flex items-start gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-container-low)] px-3 py-3 transition-colors ${
             toolSearchUnsupported
               ? 'cursor-not-allowed opacity-70'
@@ -1919,7 +1922,7 @@ function ProviderFormModal({ open, onClose, mode, provider, presets }: ProviderF
               {toolSearchDescription}
             </div>
           </div>
-        </label>
+        </label>}
 
         <div className="flex flex-col gap-1">
           <label htmlFor="provider-api-key" className="text-sm font-medium text-[var(--color-text-primary)]">

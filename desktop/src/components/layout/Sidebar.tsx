@@ -634,15 +634,61 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
   const handleBatchExport = useCallback(async () => {
     const ids = [...selectedSessionIds]
     if (ids.length === 0) return
-    let successCount = 0
-    for (const sessionId of ids) {
-      await handleExportSession(sessionId)
-      successCount++
-    }
-    if (successCount > 0) {
+
+    if (ids.length === 1) {
+      await handleExportSession(ids[0]!)
       handleExitBatchMode()
+      return
     }
-  }, [handleExportSession, handleExitBatchMode, selectedSessionIds])
+
+    // Multiple sessions: collect blobs, pack into zip
+    try {
+      const { zipSync } = await import('fflate')
+      const entries: Record<string, Uint8Array> = {}
+      for (const sessionId of ids) {
+        const session = sessions.find((s) => s.id === sessionId)
+        const workDir = session?.workDir || session?.projectRoot || session?.projectPath
+        if (!workDir) continue
+        try {
+          const { filename, blob } = await projectsApi.exportSessionBlob(workDir, sessionId)
+          const buffer = await blob.arrayBuffer()
+          entries[filename] = new Uint8Array(buffer)
+        } catch {
+          // skip failed individual exports
+        }
+      }
+      const exportedCount = Object.keys(entries).length
+      if (exportedCount === 0) {
+        addToast({ type: 'error', message: t('sidebar.exportSessionFailure', { error: 'No sessions exported' }) })
+        return
+      }
+      const zipData = zipSync(entries)
+      const zipBlob = new Blob([zipData], { type: 'application/zip' })
+      const zipFilename = `sessions-export-${new Date().toISOString().slice(0, 10)}.zip`
+      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+        const objectUrl = URL.createObjectURL(zipBlob)
+        const a = document.createElement('a')
+        a.href = objectUrl
+        a.download = zipFilename
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
+      }
+      addToast({
+        type: 'success',
+        message: t('sidebar.exportSessionSuccess', { filename: `${zipFilename} (${exportedCount} sessions)` }),
+      })
+      handleExitBatchMode()
+    } catch (error) {
+      addToast({
+        type: 'error',
+        message: t('sidebar.exportSessionFailure', {
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      })
+    }
+  }, [addToast, handleExitBatchMode, handleExportSession, selectedSessionIds, sessions, t])
 
   const requestBatchDelete = useCallback((ids: string[]) => {
     if (ids.length === 0) return

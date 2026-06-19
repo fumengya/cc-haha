@@ -174,6 +174,30 @@ export const projectsApi = {
   },
 
   /**
+   * Fetch a session's JSONL export as a raw Blob (no download trigger).
+   * Used by batch export to collect multiple sessions before zipping.
+   */
+  async exportSessionBlob(workDir: string, sessionId: string): Promise<{ filename: string; blob: Blob }> {
+    const params = new URLSearchParams({ workDir, sessionId })
+    const url = getApiUrl(`/api/projects/sessions/export?${params.toString()}`)
+    const token = getAuthToken()
+    const headers: Record<string, string> = {}
+    if (token) headers.Authorization = `Bearer ${token}`
+    const res = await fetch(url, { headers })
+    if (!res.ok) {
+      let message = `Export failed (${res.status})`
+      try {
+        const body = await res.json() as { message?: string }
+        if (body?.message) message = body.message
+      } catch { /* ignore */ }
+      throw new Error(message)
+    }
+    const blob = await res.blob()
+    const filename = `${sessionId}.jsonl`
+    return { filename, blob }
+  },
+
+  /**
    * Upload a .jsonl transcript and import it as a new session under the
    * given project (workDir). Returns the new server-side session id.
    */
