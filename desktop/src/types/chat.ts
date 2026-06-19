@@ -301,7 +301,6 @@ export type UIMessage =
       timestamp: number
       parentToolUseId?: string
       isPending?: boolean
-      status?: 'stopped'
       partialInput?: string
     }
   | { id: string; type: 'tool_result'; toolUseId: string; content: unknown; isError: boolean; timestamp: number; parentToolUseId?: string }
