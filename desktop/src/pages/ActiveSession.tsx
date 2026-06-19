@@ -451,7 +451,7 @@ export function ActiveSession() {
           {isEmpty ? (
             <div
               data-testid="empty-session-hero"
-              className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 overflow-y-auto p-8 pb-32"
+              className={`flex min-h-0 flex-1 flex-col items-center justify-center gap-1 overflow-y-auto p-8 ${compactEmptyHero ? 'pb-6' : 'pb-32'}`}
             >
               <div className="flex max-w-md flex-col items-center text-center">
                 {isMemberSession ? (
