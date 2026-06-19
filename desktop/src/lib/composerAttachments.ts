@@ -1,6 +1,7 @@
 import { getApiUrl } from '../api/client'
 import { isDesktopRuntime } from './desktopRuntime'
 import { getDesktopHost } from './desktopHost'
+import { compressDataUrl } from './imageCompress'
 
 export type ComposerAttachment = {
   id: string
@@ -121,12 +122,13 @@ async function fileToComposerAttachment(file: File): Promise<ComposerAttachment 
   }
 
   const isImage = file.type.startsWith('image/')
-  const data = await readFileAsDataUrl(file)
+  const rawData = await readFileAsDataUrl(file)
+  const data = isImage ? await compressDataUrl(rawData) : rawData
   return {
     id: nextAttachmentId(),
     name: file.name,
     type: isImage ? 'image' : 'file',
-    mimeType: file.type || undefined,
+    mimeType: isImage ? 'image/jpeg' : (file.type || undefined),
     previewUrl: isImage ? data : undefined,
     data,
   }

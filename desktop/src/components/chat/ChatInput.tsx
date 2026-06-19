@@ -42,6 +42,7 @@ import {
   selectNativeFileAttachments,
   type ComposerAttachment,
 } from '../../lib/composerAttachments'
+import { compressDataUrl } from '../../lib/imageCompress'
 import { useComposerFileDrop } from './useComposerFileDrop'
 import { shouldSubmitOnEnter } from './sendShortcut'
 import {
@@ -903,17 +904,20 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
       const id = `att-${Date.now()}-${Math.random().toString(36).slice(2)}`
       const reader = new FileReader()
       reader.onload = () => {
-        setComposerAttachments((prev) => [
-          ...prev,
-          {
-            id,
-            name: `pasted-image-${Date.now()}.png`,
-            type: 'image',
-            mimeType: file.type || 'image/png',
-            previewUrl: reader.result as string,
-            data: reader.result as string,
-          },
-        ])
+        const rawDataUrl = reader.result as string
+        void compressDataUrl(rawDataUrl).then((compressed) => {
+          setComposerAttachments((prev) => [
+            ...prev,
+            {
+              id,
+              name: `pasted-image-${Date.now()}.png`,
+              type: 'image',
+              mimeType: 'image/jpeg',
+              previewUrl: compressed,
+              data: compressed,
+            },
+          ])
+        })
       }
       reader.readAsDataURL(file)
     }
