@@ -103,6 +103,7 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
   const [pendingDeleteSessionId, setPendingDeleteSessionId] = useState<string | null>(null)
   const [pendingBatchDeleteSessionIds, setPendingBatchDeleteSessionIds] = useState<string[] | null>(null)
   const [isBatchDeleting, setIsBatchDeleting] = useState(false)
+  const [isBatchExporting, setIsBatchExporting] = useState(false)
   const [pendingClearProjectKey, setPendingClearProjectKey] = useState<string | null>(null)
   const [isClearingProject, setIsClearingProject] = useState(false)
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -642,6 +643,8 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
     }
 
     // Multiple sessions: collect blobs, pack into zip
+    setIsBatchExporting(true)
+    addToast({ type: 'info', message: t('sidebar.batchExporting', { count: ids.length }) })
     try {
       const { zipSync } = await import('fflate')
       const entries: Record<string, Uint8Array> = {}
@@ -687,6 +690,8 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
           error: error instanceof Error ? error.message : String(error),
         }),
       })
+    } finally {
+      setIsBatchExporting(false)
     }
   }, [addToast, handleExitBatchMode, handleExportSession, selectedSessionIds, sessions, t])
 
@@ -999,10 +1004,10 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
                   <button
                     type="button"
                     onClick={() => void handleBatchExport()}
-                    disabled={selectedCount === 0}
+                    disabled={selectedCount === 0 || isBatchExporting}
                     className="rounded-md border border-[var(--color-border)] px-2 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
                   >
-                    {t('sidebar.batchExportSelected', { count: selectedCount })}
+                    {isBatchExporting ? t('sidebar.batchExporting', { count: selectedCount }) : t('sidebar.batchExportSelected', { count: selectedCount })}
                   </button>
                   <button
                     type="button"
