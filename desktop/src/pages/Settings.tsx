@@ -48,7 +48,7 @@ import { DiagnosticsSettings } from './DiagnosticsSettings'
 import { TraceList } from './TraceList'
 import { ActivitySettings } from './ActivitySettings'
 import { MemorySettings } from './MemorySettings'
-import { useUIStore, type SettingsTab } from '../stores/uiStore'
+import { useUIStore } from '../stores/uiStore'
 import { ClaudeOfficialLogin } from '../components/settings/ClaudeOfficialLogin'
 import { ChatGPTOfficialLogin } from '../components/settings/ChatGPTOfficialLogin'
 import {
@@ -181,7 +181,8 @@ function buildH5PublicBaseUrlFromHostDraft(draft: string, currentBaseUrl: string
 }
 
 export function Settings() {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('providers')
+  const activeTab = useUIStore((s) => s.activeSettingsTab)
+  const setActiveTab = useUIStore((s) => s.setActiveSettingsTab)
   const pendingSettingsTab = useUIStore((s) => s.pendingSettingsTab)
   const t = useTranslation()
 
@@ -189,7 +190,7 @@ export function Settings() {
     if (!pendingSettingsTab) return
     setActiveTab(pendingSettingsTab)
     useUIStore.getState().setPendingSettingsTab(null)
-  }, [pendingSettingsTab])
+  }, [pendingSettingsTab, setActiveTab])
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[var(--color-surface)]">
@@ -1372,7 +1373,7 @@ function ProviderFormModal({ open, onClose, mode, provider, presets }: ProviderF
   )
 
   const handleSubmit = async () => {
-    if (!canSubmit) return
+    if (!canSubmit || isSubmitting) return
     const normalizedModels = normalizeModelMapping(models)
     const parsedAutoCompactWindow = parseAutoCompactWindowInput(autoCompactWindow)
     const parsedModelContextWindows = buildModelContextWindows(models, modelContextInputs)
@@ -1435,6 +1436,11 @@ function ProviderFormModal({ open, onClose, mode, provider, presets }: ProviderF
     }
   }
 
+  const handleClose = () => {
+    if (isSubmitting) return
+    onClose()
+  }
+
   const handleTest = async () => {
     if (!baseUrl.trim() || !models.main.trim()) return
     setIsTesting(true)
@@ -1469,13 +1475,13 @@ function ProviderFormModal({ open, onClose, mode, provider, presets }: ProviderF
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       title={mode === 'create' ? t('settings.providers.addTitle') : t('settings.providers.editTitle')}
       width={720}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button onClick={handleSubmit} disabled={!canSubmit} loading={isSubmitting}>
+          <Button variant="secondary" onClick={handleClose} disabled={isSubmitting}>{t('common.cancel')}</Button>
+          <Button onClick={handleSubmit} disabled={!canSubmit || isSubmitting} loading={isSubmitting}>
             {mode === 'create' ? t('common.add') : t('common.save')}
           </Button>
         </>

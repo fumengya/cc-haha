@@ -561,11 +561,17 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
     const oldId = activeTabId
     const { createSession, deleteSession } = useSessionStore.getState()
     const { replaceTabSession } = useTabStore.getState()
-    const { disconnectSession, connectToSession } = useChatStore.getState()
+    const { disconnectSession, connectToSession, setComposerDraft } = useChatStore.getState()
     const newId = await createSession(
       workDir || undefined,
       repository ? { repository } : undefined,
     )
+    if (inputRef.current.length > 0 || attachmentsRef.current.length > 0) {
+      setComposerDraft(newId, {
+        input: inputRef.current,
+        attachments: attachmentsRef.current,
+      })
+    }
     useSessionRuntimeStore.getState().moveSelection(oldId, newId)
     disconnectSession(oldId)
     replaceTabSession(oldId, newId)

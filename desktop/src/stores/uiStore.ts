@@ -51,6 +51,7 @@ type UIStore = {
   theme: ThemeMode
   sidebarOpen: boolean
   activeView: ActiveView
+  activeSettingsTab: SettingsTab
   pendingSettingsTab: SettingsTab | null
   pendingMemoryPath: string | null
   activeModal: string | null
@@ -61,6 +62,7 @@ type UIStore = {
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   setActiveView: (view: ActiveView) => void
+  setActiveSettingsTab: (tab: SettingsTab) => void
   setPendingSettingsTab: (tab: SettingsTab | null) => void
   setPendingMemoryPath: (path: string | null) => void
   openModal: (id: string) => void
@@ -75,6 +77,7 @@ export const useUIStore = create<UIStore>((set) => ({
   theme: getStoredTheme(),
   sidebarOpen: true,
   activeView: 'code',
+  activeSettingsTab: 'providers',
   pendingSettingsTab: null,
   pendingMemoryPath: null,
   activeModal: null,
@@ -99,6 +102,7 @@ export const useUIStore = create<UIStore>((set) => ({
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   setActiveView: (view) => set({ activeView: view }),
+  setActiveSettingsTab: (tab) => set({ activeSettingsTab: tab }),
   setPendingSettingsTab: (tab) => set({ pendingSettingsTab: tab }),
   setPendingMemoryPath: (path) => set({ pendingMemoryPath: path }),
   openModal: (id) => set({ activeModal: id }),

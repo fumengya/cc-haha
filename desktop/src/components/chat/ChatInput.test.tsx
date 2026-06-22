@@ -322,6 +322,73 @@ describe('ChatInput file mentions', () => {
     })
   })
 
+  it('keeps the unsent draft when switching project on an empty active session', async () => {
+    installElectronFileHost()
+    mocks.dialogOpen.mockResolvedValueOnce('/other')
+    mocks.create.mockResolvedValueOnce({ sessionId: 'session-project-switch', workDir: '/other' })
+    mocks.getRepositoryContext.mockImplementation(async (workDir: string) => ({
+      ...okRepositoryContext(),
+      workDir,
+      repoRoot: workDir,
+      repoName: workDir.split('/').filter(Boolean).pop() ?? 'repo',
+    }))
+    useSessionStore.setState({
+      sessions: [{
+        id: sessionId,
+        title: 'Project',
+        createdAt: '2026-05-01T00:00:00.000Z',
+        modifiedAt: '2026-05-01T00:00:00.000Z',
+        messageCount: 0,
+        projectPath: '/repo',
+        workDir: '/repo',
+        workDirExists: true,
+      }],
+      activeSessionId: sessionId,
+    })
+    useChatStore.setState({
+      sessions: {
+        [sessionId]: {
+          messages: [],
+          chatState: 'idle',
+          connectionState: 'connected',
+          streamingText: '',
+          streamingToolInput: '',
+          activeToolUseId: null,
+          activeToolName: null,
+          activeThinkingId: null,
+          pendingPermission: null,
+          pendingComputerUsePermission: null,
+          tokenUsage: { input_tokens: 0, output_tokens: 0 },
+          streamingResponseChars: 0,
+          elapsedSeconds: 0,
+          statusVerb: '',
+          slashCommands: [],
+          agentTaskNotifications: {},
+          elapsedTimer: null,
+        },
+      },
+    })
+
+    render(<ChatInput variant="hero" />)
+
+    const input = screen.getByRole('textbox') as HTMLTextAreaElement
+    fireEvent.change(input, {
+      target: { value: 'draft before switching project', selectionStart: 30 },
+    })
+
+    fireEvent.click(screen.getAllByTitle('/repo')[0]!)
+    await screen.findByTestId('directory-picker-menu')
+    fireEvent.click(screen.getByRole('button', { name: /Choose a different folder/ }))
+
+    await waitFor(() => {
+      expect(mocks.create).toHaveBeenCalledWith({ workDir: '/other' })
+    })
+    await waitFor(() => {
+      expect(useTabStore.getState().activeTabId).toBe('session-project-switch')
+    })
+    expect(input.value).toBe('draft before switching project')
+  })
+
   it('restores an unsent composer draft after the composer unmounts', async () => {
     const { unmount } = render(<ChatInput compact />)
 

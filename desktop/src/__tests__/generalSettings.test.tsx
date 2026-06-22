@@ -342,7 +342,7 @@ describe('Settings > General tab', () => {
       updateH5AccessSettings: vi.fn(),
     })
 
-    useUIStore.setState({ pendingSettingsTab: null, toasts: [] })
+    useUIStore.setState({ activeSettingsTab: 'providers', pendingSettingsTab: null, toasts: [] })
     useUpdateStore.setState({
       status: 'idle',
       availableVersion: null,
@@ -367,6 +367,18 @@ describe('Settings > General tab', () => {
 
     const toggle = screen.getByLabelText('Skip WebFetch domain preflight')
     expect(toggle).toBeChecked()
+  })
+
+  it('keeps the selected settings tab when returning to Settings', () => {
+    const { unmount } = render(<Settings />)
+
+    fireEvent.click(screen.getByText('General'))
+    expect(screen.getByLabelText('Skip WebFetch domain preflight')).toBeInTheDocument()
+
+    unmount()
+    render(<Settings />)
+
+    expect(screen.getByLabelText('Skip WebFetch domain preflight')).toBeInTheDocument()
   })
 
   it('offers the pure white appearance theme', () => {
@@ -1463,6 +1475,7 @@ describe('Settings > Providers tab', () => {
     MOCK_DELETE_PROVIDER.mockReset()
     MOCK_GET_SETTINGS.mockResolvedValue({})
     MOCK_UPDATE_SETTINGS.mockResolvedValue({})
+    useUIStore.setState({ activeSettingsTab: 'providers', pendingSettingsTab: null, toasts: [] })
     useSettingsStore.setState({
       locale: 'en',
       fetchAll: vi.fn().mockResolvedValue(undefined),
@@ -1670,6 +1683,76 @@ describe('Settings > Providers tab', () => {
     })
   })
 
+  it('keeps the provider form locked while save is in flight', async () => {
+    let resolveCreate!: (provider: SavedProvider) => void
+    providerStoreState.createProvider = vi.fn().mockImplementation(() => new Promise<SavedProvider>((resolve) => {
+      resolveCreate = resolve
+    }))
+    providerStoreState.presets = [
+      {
+        id: 'custom',
+        name: 'Custom',
+        baseUrl: 'https://api.example.com/anthropic',
+        apiFormat: 'anthropic',
+        defaultModels: {
+          main: 'custom-main',
+          haiku: '',
+          sonnet: '',
+          opus: '',
+        },
+        needsApiKey: true,
+        websiteUrl: '',
+      },
+    ]
+
+    render(<Settings />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Add Provider|添加服务商/i }))
+    const dialog = screen.getByRole('dialog')
+    await waitFor(() => {
+      const settingsTextarea = dialog.querySelector('textarea')
+      expect(settingsTextarea?.value).toContain('"ANTHROPIC_MODEL"')
+    })
+
+    fireEvent.change(within(dialog).getByPlaceholderText('sk-...'), { target: { value: 'sk-test' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: /Save|Add|保存|添加/i }))
+
+    await waitFor(() => {
+      expect(providerStoreState.createProvider).toHaveBeenCalledTimes(1)
+    })
+
+    const cancelButton = within(dialog).getByRole('button', { name: /Cancel|取消/i })
+    expect(cancelButton).toBeDisabled()
+
+    fireEvent.click(cancelButton)
+    fireEvent.click(within(dialog).getByRole('button', { name: /Save|Add|保存|添加/i }))
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(providerStoreState.createProvider).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolveCreate({
+        id: 'provider-new',
+        presetId: 'custom',
+        name: 'Custom',
+        apiKey: 'sk-test',
+        baseUrl: 'https://api.example.com/anthropic',
+        apiFormat: 'anthropic',
+        models: {
+          main: 'custom-main',
+          haiku: 'custom-main',
+          sonnet: 'custom-main',
+          opus: 'custom-main',
+        },
+      })
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+  })
+
   it('defaults Tool Search on and persists an explicit disable from the provider form', async () => {
     MOCK_GET_SETTINGS.mockResolvedValue({ env: { EXISTING_ENV: '1' } })
     providerStoreState.createProvider = vi.fn().mockResolvedValue({
@@ -1859,7 +1942,7 @@ describe('Settings > Providers tab', () => {
 
 describe('Settings > About tab', () => {
   beforeEach(() => {
-    useUIStore.setState({ pendingSettingsTab: 'about' })
+    useUIStore.setState({ activeSettingsTab: 'providers', pendingSettingsTab: 'about' })
     useSettingsStore.setState({
       locale: 'en',
       updateProxy: { mode: 'system', url: '' },
