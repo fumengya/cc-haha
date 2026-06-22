@@ -188,4 +188,30 @@ describe('plan mode permission UI', () => {
     expect(container.textContent).toContain('/tmp/claude-plan.md')
     expect(container.textContent).not.toContain('Tool Output')
   })
+
+  it('renders EnterPlanMode as a compact status instead of raw model instructions', () => {
+    const { container } = render(
+      <ToolCallBlock
+        toolName="EnterPlanMode"
+        input={{}}
+        result={{
+          isError: false,
+          content: [
+            'Entered plan mode. You should now focus on exploring the codebase and designing an implementation approach.',
+            '',
+            'In plan mode, you should:',
+            '1. Thoroughly explore the codebase',
+            '2. Ask clarifying questions if needed',
+            '',
+            'Remember: DO NOT write or edit files until the user approves your plan.',
+          ].join('\n'),
+        }}
+      />,
+    )
+
+    expect(container.textContent).toContain('Plan mode')
+    expect(container.textContent).not.toContain('Tool Output')
+    expect(container.textContent).not.toContain('Thoroughly explore the codebase')
+    expect(container.textContent).not.toContain('Remember: DO NOT write or edit files')
+  })
 })
