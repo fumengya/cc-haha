@@ -76,6 +76,17 @@ export type H5AccessSettings = {
 
 export type H5HostStaleness = 'ok' | 'unreachable' | 'proxy' | 'unset'
 
+export type H5TunnelMode = 'quick' | 'named'
+export type H5TunnelStatus = 'idle' | 'starting' | 'running' | 'error'
+
+export type H5TunnelDiagnostics = {
+  status: H5TunnelStatus
+  url: string | null
+  mode: H5TunnelMode | null
+  error: string | null
+  hasToken: boolean
+}
+
 export type H5AccessDiagnostics = {
   storedHostStaleness: H5HostStaleness
   storedPublicBaseUrl: string | null
@@ -83,6 +94,7 @@ export type H5AccessDiagnostics = {
   suggestedHost: string | null
   localInterfaceHosts: string[]
   activePort?: number
+  tunnel?: H5TunnelDiagnostics
 }
 
 export type DesktopTerminalStartupShell =

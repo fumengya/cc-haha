@@ -13,6 +13,7 @@ import {
   type DesktopTerminalStartupShell,
   type H5AccessDiagnostics,
   type H5AccessSettings,
+  type H5TunnelMode,
   type NetworkSettings,
   type OutputStyleOption,
   type OutputStylesResponse,
@@ -122,7 +123,11 @@ type SettingsStore = {
     publicBaseUrl?: string | null
     fixedPort?: number | null
     disconnectGraceSeconds?: number | null
+    tunnelToken?: string | null
+    tunnelMode?: H5TunnelMode | null
   }) => Promise<void>
+  startH5Tunnel: (options: { mode: H5TunnelMode; token?: string | null; namedUrl?: string | null }) => Promise<void>
+  stopH5Tunnel: () => Promise<void>
   setResponseLanguage: (language: string) => Promise<void>
   fetchAppMode: () => Promise<void>
   setAppMode: (mode: AppMode, portableDir?: string | null) => Promise<void>
@@ -589,6 +594,35 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       await refreshH5DiagnosticsSilent(set)
     } catch (error) {
       set({ h5AccessError: getErrorMessage(error, 'Failed to update H5 access settings.') })
+      throw error
+    }
+  },
+
+  startH5Tunnel: async (options) => {
+    set({ h5AccessError: null })
+    try {
+      await h5AccessApi.startTunnel(options)
+      // The main process reports the tunnel URL back to the server, so a
+      // diagnostics refresh picks up the new effective publicBaseUrl + status.
+      await refreshH5DiagnosticsSilent(set)
+      const error = get().h5AccessDiagnostics?.tunnel?.error
+      if (error) {
+        set({ h5AccessError: error })
+        throw new Error(error)
+      }
+    } catch (error) {
+      set({ h5AccessError: getErrorMessage(error, 'Failed to start the tunnel.') })
+      throw error
+    }
+  },
+
+  stopH5Tunnel: async () => {
+    set({ h5AccessError: null })
+    try {
+      await h5AccessApi.stopTunnel()
+      await refreshH5DiagnosticsSilent(set)
+    } catch (error) {
+      set({ h5AccessError: getErrorMessage(error, 'Failed to stop the tunnel.') })
       throw error
     }
   },

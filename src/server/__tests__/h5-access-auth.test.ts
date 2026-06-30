@@ -18,8 +18,10 @@ let originalAnthropicApiKey: string | undefined
 let originalH5DistDir: string | undefined
 let originalClaudeAppRoot: string | undefined
 let originalServerAuthRequired: string | undefined
+let originalH5TunnelUrl: string | undefined
 let originalServerPort = 3456
 const PHONE_ORIGIN = 'https://phone.example'
+const TUNNEL_ORIGIN = 'https://abcd-1234.ngrok-free.app'
 
 async function waitForServer(url: string): Promise<void> {
   for (let attempt = 0; attempt < 50; attempt += 1) {
@@ -208,8 +210,10 @@ beforeEach(async () => {
   originalH5DistDir = process.env.CLAUDE_H5_DIST_DIR
   originalClaudeAppRoot = process.env.CLAUDE_APP_ROOT
   originalServerAuthRequired = process.env.SERVER_AUTH_REQUIRED
+  originalH5TunnelUrl = process.env.CLAUDE_H5_TUNNEL_URL
   originalServerPort = ProviderService.getServerPort()
   process.env.CLAUDE_CONFIG_DIR = tmpDir
+  delete process.env.CLAUDE_H5_TUNNEL_URL
   const h5DistDir = path.join(tmpDir, 'dist')
   process.env.CLAUDE_H5_DIST_DIR = h5DistDir
   delete process.env.ANTHROPIC_API_KEY
@@ -239,6 +243,8 @@ afterEach(async () => {
   else process.env.CLAUDE_APP_ROOT = originalClaudeAppRoot
   if (originalServerAuthRequired === undefined) delete process.env.SERVER_AUTH_REQUIRED
   else process.env.SERVER_AUTH_REQUIRED = originalServerAuthRequired
+  if (originalH5TunnelUrl === undefined) delete process.env.CLAUDE_H5_TUNNEL_URL
+  else process.env.CLAUDE_H5_TUNNEL_URL = originalH5TunnelUrl
 
   await fs.rm(tmpDir, { recursive: true, force: true })
 })
@@ -665,6 +671,60 @@ describe('remote H5 auth and CORS integration', () => {
 
     expect(response.status).toBe(200)
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe(PHONE_ORIGIN)
+  })
+
+  test('allows H5 browser requests from a runtime tunnel URL origin', async () => {
+    // The tunnel URL is a runtime override (CLAUDE_H5_TUNNEL_URL), not a stored
+    // setting, yet its origin must be trusted just like a configured publicBaseUrl.
+    process.env.CLAUDE_H5_TUNNEL_URL = `${TUNNEL_ORIGIN}/h5`
+    const token = await enableH5Access()
+
+    const response = await fetch(`${baseUrl}/api/status`, {
+      headers: {
+        Origin: TUNNEL_ORIGIN,
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe(TUNNEL_ORIGIN)
+  })
+
+  test('still requires a valid H5 token for tunnel-origin browser requests', async () => {
+    process.env.CLAUDE_H5_TUNNEL_URL = TUNNEL_ORIGIN
+    await enableH5Access()
+
+    const missingTokenResponse = await fetch(`${baseUrl}/api/mcp`, {
+      headers: {
+        Origin: TUNNEL_ORIGIN,
+      },
+    })
+    expect(missingTokenResponse.status).toBe(401)
+
+    const wrongTokenResponse = await fetch(`${baseUrl}/api/mcp`, {
+      headers: {
+        Origin: TUNNEL_ORIGIN,
+        Authorization: 'Bearer wrong-token',
+      },
+    })
+    expect(wrongTokenResponse.status).toBe(401)
+  })
+
+  test('blocks tunnel-origin browser requests while H5 access is disabled', async () => {
+    // Exposing a tunnel must not implicitly open access: with H5 disabled the
+    // public entry point is still rejected.
+    process.env.CLAUDE_H5_TUNNEL_URL = TUNNEL_ORIGIN
+
+    const response = await fetch(`${baseUrl}/api/status`, {
+      headers: {
+        Origin: TUNNEL_ORIGIN,
+      },
+    })
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'Forbidden',
+    })
   })
 
   test('allows configured CORS origins and includes Vary: Origin', async () => {
