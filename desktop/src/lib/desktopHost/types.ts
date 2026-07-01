@@ -187,6 +187,8 @@ export type DesktopHost = {
   shell: {
     open(target: string): Promise<void>
     openPath(path: string): Promise<void>
+    /** Reveal a file in the OS file manager with the file itself selected. */
+    showItemInFolder?(target: string): Promise<void>
   }
   trace?: {
     openWindow(sessionId: string): Promise<void>

@@ -83,6 +83,7 @@ export const ELECTRON_IPC_VALIDATORS = {
   [ELECTRON_IPC_CHANNELS.clipboardWriteText]: stringPayload,
   [ELECTRON_IPC_CHANNELS.shellOpen]: stringPayload,
   [ELECTRON_IPC_CHANNELS.shellOpenPath]: stringPayload,
+  [ELECTRON_IPC_CHANNELS.shellShowItemInFolder]: stringPayload,
   [ELECTRON_IPC_CHANNELS.traceOpenWindow]: sessionIdPayload,
   [ELECTRON_IPC_CHANNELS.dialogOpen]: optionalRecord,
   [ELECTRON_IPC_CHANNELS.dialogSave]: optionalRecord,

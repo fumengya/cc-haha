@@ -5,7 +5,7 @@ import { ELECTRON_EVENT_CHANNELS, ELECTRON_INTERNAL_CHANNELS, ELECTRON_IPC_CHANN
 import { isElectronIpcChannel, validateElectronIpcPayload } from './ipc/capabilities'
 import { ElectronServerRuntime, type TunnelStartOptions } from './services/serverRuntime'
 import { openDialog, saveDialog } from './services/dialogs'
-import { openExternalUrl, openSystemPath, openSystemSettingsUrl } from './services/shell'
+import { openExternalUrl, openSystemPath, openSystemSettingsUrl, showItemInFolder } from './services/shell'
 import {
   notificationPermissionState,
   requestNotificationPermission,
@@ -262,6 +262,7 @@ function registerIpcHandlers() {
   registerHandler(ELECTRON_IPC_CHANNELS.clipboardWriteText, (_event, payload) => clipboard.writeText(String(payload)))
   registerHandler(ELECTRON_IPC_CHANNELS.shellOpen, (_event, payload) => openExternalUrl(String(payload)))
   registerHandler(ELECTRON_IPC_CHANNELS.shellOpenPath, (_event, payload) => openSystemPath(String(payload)))
+  registerHandler(ELECTRON_IPC_CHANNELS.shellShowItemInFolder, (_event, payload) => showItemInFolder(String(payload)))
   registerHandler(ELECTRON_IPC_CHANNELS.traceOpenWindow, (_event, payload) => openTraceWindow(String(payload)))
   registerHandler(ELECTRON_IPC_CHANNELS.dialogOpen, (event, payload) =>
     openDialog(currentWindow(event), payload as Parameters<typeof openDialog>[1]))

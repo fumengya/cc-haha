@@ -58,6 +58,12 @@ export type SessionListItem = {
   workDir: string | null
   workDirExists: boolean
   permissionMode?: string
+  /**
+   * Absolute path of the JSONL file that backs this session on disk. Lets the
+   * UI offer "copy file path" / "reveal in file manager" actions and pass the
+   * path to external tools (e.g. another AI that can read the transcript).
+   */
+  filePath: string
 }
 
 export type DeleteSessionFailure = {
@@ -1950,6 +1956,7 @@ export class SessionService {
           workDir,
           workDirExists,
           permissionMode: summary.permissionMode,
+          filePath,
         })
       } catch {
         // Skip unreadable files
@@ -2005,6 +2012,7 @@ export class SessionService {
       workDir,
       workDirExists,
       permissionMode,
+      filePath,
       messages,
     }
   }
