@@ -44,6 +44,7 @@ import {
   roughTokenCountEstimationForMessage,
 } from '../../services/tokenEstimation.js'
 import { ProviderService } from './providerService.js'
+import { shouldHideCommandMetadataContent } from '../../utils/commandMetadata.js'
 
 // ============================================================================
 // Types
@@ -843,19 +844,6 @@ export class SessionService {
       .filter(Boolean)
   }
 
-  private isInternalCommandBreadcrumb(content: unknown): boolean {
-    const textBlocks = this.extractTextBlocks(content)
-    return (
-      textBlocks.length > 0 &&
-      textBlocks.every((text) =>
-        text.includes('<command-name>') ||
-        text.includes('<command-message>') ||
-        text.includes('<command-args>') ||
-        text.includes('<local-command-caveat>')
-      )
-    )
-  }
-
   private isSyntheticUserInterruption(content: unknown): boolean {
     const textBlocks = this.extractTextBlocks(content)
     return (
@@ -950,7 +938,7 @@ export class SessionService {
 
     if (role === 'user') {
       return (
-        this.isInternalCommandBreadcrumb(content) ||
+        shouldHideCommandMetadataContent(content) ||
         this.isSyntheticUserInterruption(content) ||
         this.isTaskNotificationContent(content)
       )

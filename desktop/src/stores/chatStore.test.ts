@@ -572,7 +572,7 @@ describe('chatStore history mapping', () => {
     ])
   })
 
-  it('does not restore internal slash-command breadcrumbs as user history bubbles', () => {
+  it('restores slash-command metadata as readable history while skipping malformed breadcrumbs', () => {
     const messages: MessageEntry[] = [
       {
         id: 'agent-command-string',
@@ -600,6 +600,12 @@ describe('chatStore history mapping', () => {
         ],
       },
       {
+        id: 'malformed-command',
+        type: 'user',
+        timestamp: '2026-06-15T03:32:14.500Z',
+        content: '<command-name>/agent</command-name> malformed breadcrumb',
+      },
+      {
         id: 'transcript-user-1',
         type: 'user',
         timestamp: '2026-06-15T03:32:15.000Z',
@@ -609,11 +615,48 @@ describe('chatStore history mapping', () => {
 
     expect(mapHistoryMessagesToUiMessages(messages)).toMatchObject([
       {
+        id: 'agent-command-string',
+        type: 'user_text',
+        content: '/agent Plan 222',
+      },
+      {
+        id: 'agent-command-array',
+        type: 'user_text',
+        content: '/agent Plan 333',
+      },
+      {
         id: 'transcript-user-1',
         type: 'user_text',
         content: '继续处理这个问题',
       },
     ])
+  })
+
+  it('restores user-invoked skill command metadata as readable user history', () => {
+    const messages: MessageEntry[] = [
+      {
+        id: 'skill-command-user',
+        type: 'user',
+        timestamp: '2026-06-26T14:59:44.000Z',
+        content: [
+          '<command-message>frontend-design</command-message>',
+          '<command-name>/frontend-design</command-name>',
+          '<command-args>redesign the settings page</command-args>',
+        ].join('\n'),
+      },
+    ]
+
+    const mapped = mapHistoryMessagesToUiMessages(messages)
+
+    expect(mapped).toMatchObject([
+      {
+        id: 'skill-command-user',
+        type: 'user_text',
+        content: '/frontend-design redesign the settings page',
+        transcriptMessageId: 'skill-command-user',
+      },
+    ])
+    expect(mapped[0]?.type === 'user_text' ? mapped[0].content : '').not.toContain('<command-message>')
   })
 
   it('restores persisted image user messages as renderable attachments without exposing image metadata text', () => {

@@ -2569,14 +2569,74 @@ function extractHistoryTextBlocks(content: unknown): string[] {
     .filter(Boolean)
 }
 
-function isInternalCommandBreadcrumbContent(content: unknown): boolean {
-  const textBlocks = extractHistoryTextBlocks(content)
-  return textBlocks.length > 0 && textBlocks.every((text) => (
+const COMMAND_METADATA_TAGS = new Set([
+  'command-name',
+  'command-message',
+  'command-args',
+  'local-command-caveat',
+  'skill-format',
+])
+const COMMAND_METADATA_BLOCK_RE = /<([a-z][\w-]*)(?:\s[^>]*)?>[\s\S]*?<\/\1>\s*/gi
+
+function hasCommandMetadataTag(text: string): boolean {
+  return (
     text.includes('<command-name>') ||
     text.includes('<command-message>') ||
     text.includes('<command-args>') ||
-    text.includes('<local-command-caveat>')
+    text.includes('<local-command-caveat>') ||
+    text.includes('<skill-format>')
+  )
+}
+
+function isOnlyKnownCommandMetadata(text: string): boolean {
+  const remainder = text.replace(COMMAND_METADATA_BLOCK_RE, (match, tag: string) => (
+    COMMAND_METADATA_TAGS.has(tag.toLowerCase()) ? '' : match
   ))
+  return remainder.trim().length === 0
+}
+
+function formatCommandMetadataDisplayText(
+  commandName: string,
+  args: string,
+  skillFormat: boolean,
+  commandMessage?: string,
+): string {
+  if (skillFormat) {
+    return `Skill(${commandMessage || commandName.replace(/^\//, '')})`
+  }
+
+  const normalizedName = commandName.startsWith('/') ? commandName : `/${commandName}`
+  return [normalizedName, args.trim()].filter(Boolean).join(' ')
+}
+
+function parseCommandMetadataText(text: string): string | null {
+  const trimmed = text.trim()
+  if (!hasCommandMetadataTag(trimmed)) return null
+  if (!isOnlyKnownCommandMetadata(trimmed)) return null
+
+  const commandName = readXmlTag(trimmed, 'command-name')
+  if (!commandName) return null
+
+  const args = readXmlTag(trimmed, 'command-args') ?? ''
+  const commandMessage = readXmlTag(trimmed, 'command-message')
+  const skillFormat = readXmlTag(trimmed, 'skill-format') === 'true'
+  return formatCommandMetadataDisplayText(commandName, args, skillFormat, commandMessage)
+}
+
+function getCommandMetadataDisplayText(content: unknown): string | null {
+  const textBlocks = extractHistoryTextBlocks(content)
+  if (textBlocks.length === 0) return null
+
+  const displayBlocks = textBlocks.map(parseCommandMetadataText)
+  if (displayBlocks.some((text) => text === null)) return null
+  return displayBlocks.join('\n')
+}
+
+function shouldHideCommandMetadataContent(content: unknown): boolean {
+  const textBlocks = extractHistoryTextBlocks(content)
+  if (textBlocks.length === 0) return false
+  if (!textBlocks.some(hasCommandMetadataTag)) return false
+  return getCommandMetadataDisplayText(content) === null
 }
 
 function isTaskNotificationContent(content: unknown): boolean {
@@ -3298,8 +3358,22 @@ export function mapHistoryMessagesToUiMessages(
       suppressTaskNotificationResponse = true
       continue
     }
-    if (msg.type === 'user' && isInternalCommandBreadcrumbContent(msg.content)) {
-      continue
+    if (msg.type === 'user') {
+      const commandDisplayText = getCommandMetadataDisplayText(msg.content)
+      if (commandDisplayText) {
+        uiMessages.push({
+          id: msg.id || nextId(),
+          type: 'user_text',
+          content: commandDisplayText,
+          ...(msg.id ? { transcriptMessageId: msg.id } : {}),
+          timestamp: new Date(msg.timestamp).getTime(),
+        })
+        suppressTaskNotificationResponse = false
+        continue
+      }
+      if (shouldHideCommandMetadataContent(msg.content)) {
+        continue
+      }
     }
     if (msg.type === 'user') {
       suppressTaskNotificationResponse = false

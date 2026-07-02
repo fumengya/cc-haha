@@ -29,13 +29,14 @@ import {
 } from '../services/titleService.js'
 import { parseSlashCommand } from '../../utils/slashCommandParsing.js'
 import {
-  COMMAND_ARGS_TAG,
-  COMMAND_MESSAGE_TAG,
   COMMAND_NAME_TAG,
-  LOCAL_COMMAND_CAVEAT_TAG,
   LOCAL_COMMAND_STDERR_TAG,
   LOCAL_COMMAND_STDOUT_TAG,
 } from '../../constants/xml.js'
+import {
+  getCommandMetadataDisplayText,
+  shouldHideCommandMetadataContent,
+} from '../../utils/commandMetadata.js'
 import { shouldCreateWorktreeForSessionLaunch } from '../services/repositoryLaunchService.js'
 import { getDisconnectGraceMs } from './disconnectGraceConfig.js'
 
@@ -2347,34 +2348,12 @@ function hasToolResultBlock(content: unknown): boolean {
       (block as { type?: unknown }).type === 'tool_result')
 }
 
-function isInternalCommandBreadcrumb(content: unknown): boolean {
-  const textBlocks = typeof content === 'string'
-    ? [content]
-    : Array.isArray(content)
-      ? content.flatMap((block) => {
-        if (!block || typeof block !== 'object') return []
-        const typedBlock = block as { type?: unknown; text?: unknown }
-        return typedBlock.type === 'text' && typeof typedBlock.text === 'string'
-          ? [typedBlock.text]
-          : []
-      })
-      : []
-
-  return textBlocks.length > 0 && textBlocks.every((text) => {
-    const trimmed = text.trim()
-    return (
-      trimmed.includes(`<${COMMAND_NAME_TAG}>`) ||
-      trimmed.includes(`<${COMMAND_MESSAGE_TAG}>`) ||
-      trimmed.includes(`<${COMMAND_ARGS_TAG}>`) ||
-      trimmed.includes(`<${LOCAL_COMMAND_CAVEAT_TAG}>`)
-    )
-  })
-}
-
 function extractReplayUserText(cliMsg: any): string | null {
   if (cliMsg?.isReplay !== true) return null
   const content = cliMsg.message?.content
-  if (isInternalCommandBreadcrumb(content)) return null
+  const commandDisplayText = getCommandMetadataDisplayText(content)
+  if (commandDisplayText) return commandDisplayText
+  if (shouldHideCommandMetadataContent(content)) return null
   if (isCompactSummaryMessageContent(content)) return null
   if (hasToolResultBlock(content)) return null
   if (extractLocalCommandOutput(content)) return null

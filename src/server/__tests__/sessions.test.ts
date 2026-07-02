@@ -888,7 +888,7 @@ describe('SessionService', () => {
     ])
   })
 
-  it('should hide synthetic interruption, no-response, and command breadcrumb transcript entries', async () => {
+  it('should hide synthetic interruption, no-response, and malformed command breadcrumb transcript entries', async () => {
     const sessionId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
     await writeSessionFile('-tmp-project', sessionId, [
       makeSnapshotEntry(),
@@ -935,17 +935,62 @@ describe('SessionService', () => {
         uuid: crypto.randomUUID(),
         timestamp: '2026-01-01T00:00:05.000Z',
       },
+      {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: '<command-name>/agent</command-name> malformed breadcrumb',
+        },
+        uuid: crypto.randomUUID(),
+        timestamp: '2026-01-01T00:00:06.000Z',
+      },
       makeAssistantEntry('正常助手消息', crypto.randomUUID()),
     ])
 
     const messages = await service.getSessionMessages(sessionId)
 
-    expect(messages).toHaveLength(2)
+    expect(messages).toHaveLength(4)
     expect(messages[0]).toMatchObject({ type: 'user', content: '正常用户消息' })
     expect(messages[1]).toMatchObject({
+      type: 'user',
+      content: '<command-name>/exit</command-name>\n<command-message>exit</command-message>\n<command-args></command-args>',
+    })
+    expect(messages[2]).toMatchObject({
+      type: 'user',
+      content: [{
+        type: 'text',
+        text: '<command-name>/agent</command-name>\n<command-message>agent</command-message>\n<command-args>Plan 222</command-args>',
+      }],
+    })
+    expect(messages[3]).toMatchObject({
       type: 'assistant',
       content: [{ type: 'text', text: '正常助手消息' }],
     })
+  })
+
+  it('should keep user-invoked skill command metadata for desktop history restore', async () => {
+    const sessionId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    await writeSessionFile('-tmp-project', sessionId, [
+      makeSnapshotEntry(),
+      makeUserEntry([
+        '<command-message>frontend-design</command-message>',
+        '<command-name>/frontend-design</command-name>',
+        '<command-args>redesign the settings page</command-args>',
+      ].join('\n'), 'skill-command-user'),
+      makeAssistantEntry('正常助手消息', 'skill-command-user'),
+    ])
+
+    const messages = await service.getSessionMessages(sessionId)
+
+    expect(messages).toHaveLength(2)
+    const skillCommandContent = String(messages[0]!.content)
+    expect(messages[0]).toMatchObject({
+      id: 'skill-command-user',
+      type: 'user',
+      content: expect.stringContaining('<command-name>/frontend-design</command-name>'),
+    })
+    expect(skillCommandContent).toContain('<command-args>redesign the settings page</command-args>')
+    expect(messages[1]).toMatchObject({ type: 'assistant' })
   })
 
   it('should keep /goal local command transcript entries for desktop history restore', async () => {
