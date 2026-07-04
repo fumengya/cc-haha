@@ -2,14 +2,12 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from 'node:events'
 import type { SidecarChild } from './sidecarManager'
 
-// Hoisted mock state so vi.mock factories can share counters / fixtures across
-// test cases without resorting to module-level globals.
-const state = vi.hoisted(() => ({
+const state = {
   serverChild: null as (EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; pid?: number }) | null,
   tunnelChildren: [] as Array<EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; pid?: number; emitUrl?: (url: string) => void }>,
   reportPayloads: [] as Array<Record<string, unknown>>,
   fetchMock: vi.fn(),
-}))
+}
 
 function makeChild(pid: number) {
   const child = Object.assign(new EventEmitter(), {
