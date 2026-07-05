@@ -60,11 +60,21 @@ export async function handleTracesApi(
         throw methodNotAllowed(req.method, '/api/traces/settings')
 
       default:
+        if (req.method === 'DELETE' && segments.length === 3) {
+          return await deleteTraceSession(sub)
+        }
         throw ApiError.notFound(`Unknown traces endpoint: ${sub}`)
     }
   } catch (error) {
     return errorResponse(error)
   }
+}
+
+async function deleteTraceSession(segment: string): Promise<Response> {
+  const sessionId = decodePathSegment(segment).trim()
+  if (!sessionId) throw ApiError.badRequest('Trace session id is required')
+  const result = await traceCaptureService.deleteSessionTrace(sessionId)
+  return Response.json(result)
 }
 
 async function listTraces(url: URL): Promise<Response> {
@@ -167,6 +177,14 @@ function traceListItemMatchesQuery(item: Pick<TraceSessionListApiItem, 'sessionI
     .join('\n')
     .toLowerCase()
   return terms.every((term) => haystack.includes(term))
+}
+
+function decodePathSegment(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    throw ApiError.badRequest('Invalid trace session id')
+  }
 }
 
 function parseTraceListLimit(value: string | null): number {

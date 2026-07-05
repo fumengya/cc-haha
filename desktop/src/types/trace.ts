@@ -117,3 +117,8 @@ export type TraceSessionList = {
   storageDir: string
   settings: TraceCaptureSettings
 }
+
+export type TraceSessionDeleteResult = {
+  sessionId: string
+  deleted: boolean
+}

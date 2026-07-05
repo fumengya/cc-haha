@@ -16,6 +16,7 @@ import { useWorkspacePanelStore } from '../../stores/workspacePanelStore'
 import { useTerminalPanelStore } from '../../stores/terminalPanelStore'
 import { useTranslation } from '../../i18n'
 import { getDesktopHost } from '../../lib/desktopHost'
+import { hasRunningBackgroundTasks } from '../../lib/backgroundTasks'
 import { WindowControls, showWindowControls } from './WindowControls'
 import { OpenProjectMenu } from './OpenProjectMenu'
 import { Folder, FolderOpen, SquareTerminal } from 'lucide-react'
@@ -59,7 +60,11 @@ export function TabBar() {
     [tabs],
   )
   const activeChatSessionIds = useChatStore(useShallow((s) =>
-    sessionTabIds.filter((sessionId) => s.sessions[sessionId]?.chatState !== 'idle')
+    sessionTabIds.filter((sessionId) => {
+      const sessionState = s.sessions[sessionId]
+      return !!sessionState &&
+        (sessionState.chatState !== 'idle' || hasRunningBackgroundTasks(sessionState.backgroundAgentTasks))
+    })
   ))
   const disconnectSession = useChatStore((s) => s.disconnectSession)
   const activeTab = tabs.find((tab) => tab.sessionId === activeTabId) ?? null
@@ -208,7 +213,8 @@ export function TabBar() {
       .filter((tab) => isSessionTab(tab))
       .filter((tab) => {
         const sessionState = chatSessions[tab.sessionId]
-        return !!sessionState && sessionState.chatState !== 'idle'
+        return !!sessionState &&
+          (sessionState.chatState !== 'idle' || hasRunningBackgroundTasks(sessionState.backgroundAgentTasks))
       })
       .map((tab) => tab.sessionId)
   }, [])

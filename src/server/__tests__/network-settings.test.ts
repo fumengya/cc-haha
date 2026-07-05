@@ -96,6 +96,24 @@ describe('network settings', () => {
       HTTPS_PROXY: 'http://127.0.0.1:7890',
       http_proxy: 'http://127.0.0.1:7890',
       https_proxy: 'http://127.0.0.1:7890',
+      NO_PROXY: 'localhost,127.0.0.1,::1',
+      no_proxy: 'localhost,127.0.0.1,::1',
+    })
+  })
+
+  it('preserves custom no_proxy entries while adding loopback bypasses for manual proxies', () => {
+    const settings = normalizeNetworkSettings({
+      network: {
+        proxy: {
+          mode: 'manual',
+          url: 'http://proxy.example:8080',
+        },
+      },
+    })
+
+    expect(buildNetworkEnvironment(settings, { no_proxy: '.corp.local,10.0.0.0/8' })).toMatchObject({
+      NO_PROXY: '.corp.local,10.0.0.0/8,localhost,127.0.0.1,::1',
+      no_proxy: '.corp.local,10.0.0.0/8,localhost,127.0.0.1,::1',
     })
   })
 

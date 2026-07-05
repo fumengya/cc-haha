@@ -184,7 +184,8 @@ function buildH5PublicBaseUrlFromHostDraft(draft: string, currentBaseUrl: string
 }
 
 export function Settings() {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('providers')
+  const activeTab = useUIStore((s) => s.activeSettingsTab)
+  const setActiveTab = useUIStore((s) => s.setActiveSettingsTab)
   const pendingSettingsTab = useUIStore((s) => s.pendingSettingsTab)
   const t = useTranslation()
 
@@ -192,7 +193,7 @@ export function Settings() {
     if (!pendingSettingsTab) return
     setActiveTab(pendingSettingsTab)
     useUIStore.getState().setPendingSettingsTab(null)
-  }, [pendingSettingsTab])
+  }, [pendingSettingsTab, setActiveTab])
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[var(--color-surface)]">
@@ -1067,6 +1068,27 @@ function normalizeModelMapping(models: ModelMapping): ModelMapping {
   }
 }
 
+function readSettingsEnvString(env: Record<string, unknown>, key: string): string | undefined {
+  const value = env[key]
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed || undefined
+}
+
+function readModelMappingFromSettingsEnv(env: Record<string, unknown>): Partial<ModelMapping> {
+  const haiku = readSettingsEnvString(env, 'ANTHROPIC_DEFAULT_HAIKU_MODEL')
+  const sonnet = readSettingsEnvString(env, 'ANTHROPIC_DEFAULT_SONNET_MODEL')
+  const opus = readSettingsEnvString(env, 'ANTHROPIC_DEFAULT_OPUS_MODEL')
+  const main = readSettingsEnvString(env, 'ANTHROPIC_MODEL') ?? sonnet ?? haiku ?? opus
+
+  return {
+    ...(main ? { main } : {}),
+    ...(haiku ? { haiku } : {}),
+    ...(sonnet ? { sonnet } : {}),
+    ...(opus ? { opus } : {}),
+  }
+}
+
 function applyToolSearchEnv(
   env: Record<string, unknown>,
   apiFormat: ApiFormat,
@@ -1641,7 +1663,7 @@ function ProviderFormModal({ open, onClose, mode, provider, presets }: ProviderF
   )
 
   const handleSubmit = async () => {
-    if (!canSubmit) return
+    if (!canSubmit || isSubmitting) return
     const normalizedModels = normalizeModelMapping(models)
     const parsedAutoCompactWindow = parseAutoCompactWindowInput(autoCompactWindow)
     const parsedModelContextWindows = buildModelContextWindows(models, modelContextInputs)
@@ -1707,6 +1729,11 @@ function ProviderFormModal({ open, onClose, mode, provider, presets }: ProviderF
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const handleClose = () => {
+    if (isSubmitting) return
+    onClose()
   }
 
   const handleTest = async () => {
@@ -1805,13 +1832,13 @@ function ProviderFormModal({ open, onClose, mode, provider, presets }: ProviderF
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       title={mode === 'create' ? t('settings.providers.addTitle') : t('settings.providers.editTitle')}
       width={720}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button onClick={handleSubmit} disabled={!canSubmit} loading={isSubmitting}>
+          <Button variant="secondary" onClick={handleClose} disabled={isSubmitting}>{t('common.cancel')}</Button>
+          <Button onClick={handleSubmit} disabled={!canSubmit || isSubmitting} loading={isSubmitting}>
             {mode === 'create' ? t('common.add') : t('common.save')}
           </Button>
         </>
@@ -2205,11 +2232,7 @@ function ProviderFormModal({ open, onClose, mode, provider, presets }: ProviderF
                       parsedContextWindows = {}
                     }
                   }
-                  const newModels: Partial<ModelMapping> = {}
-                  if (env.ANTHROPIC_MODEL) newModels.main = env.ANTHROPIC_MODEL
-                  if (env.ANTHROPIC_DEFAULT_HAIKU_MODEL) newModels.haiku = env.ANTHROPIC_DEFAULT_HAIKU_MODEL
-                  if (env.ANTHROPIC_DEFAULT_SONNET_MODEL) newModels.sonnet = env.ANTHROPIC_DEFAULT_SONNET_MODEL
-                  if (env.ANTHROPIC_DEFAULT_OPUS_MODEL) newModels.opus = env.ANTHROPIC_DEFAULT_OPUS_MODEL
+                  const newModels = readModelMappingFromSettingsEnv(env)
                   if (Object.keys(newModels).length > 0) {
                     setModels((prev) => {
                       const mergedModels = { ...prev, ...newModels }

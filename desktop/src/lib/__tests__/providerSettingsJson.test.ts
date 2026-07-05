@@ -24,6 +24,22 @@ describe('provider settings JSON helpers', () => {
     expect(masked.env.OTHER_VALUE).toBe('visible')
   })
 
+  it('keeps cc-switch proxy-managed placeholders visible', () => {
+    const raw = JSON.stringify({
+      env: {
+        ANTHROPIC_API_KEY: 'PROXY_MANAGED',
+        ANTHROPIC_AUTH_TOKEN: 'proxy-managed',
+        OTHER_VALUE: 'visible',
+      },
+    })
+
+    const masked = JSON.parse(maskSettingsJsonSecrets(raw)) as { env: Record<string, string> }
+
+    expect(masked.env.ANTHROPIC_API_KEY).toBe('PROXY_MANAGED')
+    expect(masked.env.ANTHROPIC_AUTH_TOKEN).toBe('proxy-managed')
+    expect(masked.env.OTHER_VALUE).toBe('visible')
+  })
+
   it('restores masked Anthropic API key env vars from their previous field values', () => {
     const previousRaw = JSON.stringify({
       env: {

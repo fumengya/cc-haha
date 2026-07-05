@@ -535,6 +535,44 @@ describe('MessageList nested tool calls', () => {
     expect(screen.getByText('Budget: 0 / unlimited tokens')).toBeTruthy()
   })
 
+  it('renders goal continuation status as a divider between assistant turns', () => {
+    useChatStore.setState({
+      sessions: {
+        [ACTIVE_TAB]: makeSessionState({
+          messages: [
+            {
+              id: 'assistant-1',
+              type: 'assistant_text',
+              content: '上一轮回答到这里。',
+              timestamp: 1,
+            },
+            {
+              id: 'goal-continue',
+              type: 'goal_event',
+              action: 'status',
+              status: 'continuing',
+              message: 'Goal continuing: 还需要补充验证',
+              timestamp: 2,
+            },
+            {
+              id: 'assistant-2',
+              type: 'assistant_text',
+              content: '后续轮次从这里开始。',
+              timestamp: 3,
+            },
+          ],
+        }),
+      },
+    })
+
+    render(<MessageList />)
+
+    expect(screen.getByTestId('goal-continuation-divider')).toBeTruthy()
+    expect(screen.getByText('Goal continuing')).toBeTruthy()
+    expect(screen.getByText('还需要补充验证')).toBeTruthy()
+    expect(screen.queryByText('Goal status')).toBeNull()
+  })
+
   it('renders non-agent background progress inline in the transcript', () => {
     useChatStore.setState({
       sessions: {
@@ -584,6 +622,41 @@ describe('MessageList nested tool calls', () => {
     expect(card.textContent).toContain('Running Playwright checks')
     expect(card.textContent).toContain('1.2k tokens')
     expect(card.textContent).toContain('45s')
+  })
+
+  it('localizes non-agent background task duration units', () => {
+    useSettingsStore.setState({ locale: 'zh' })
+    useChatStore.setState({
+      sessions: {
+        [ACTIVE_TAB]: makeSessionState({
+          messages: [
+            {
+              id: 'background-task-shell-1',
+              type: 'background_task',
+              timestamp: 2,
+              task: {
+                taskId: 'shell-task-1',
+                toolUseId: 'shell-tool-1',
+                status: 'completed',
+                taskType: 'local_bash',
+                summary: 'Running Playwright checks',
+                usage: {
+                  totalTokens: 1200,
+                  toolUses: 4,
+                  durationMs: 65000,
+                },
+                startedAt: 2,
+                updatedAt: 2,
+              },
+            },
+          ],
+        }),
+      },
+    })
+
+    render(<MessageList />)
+
+    expect(screen.getByTestId('background-task-event-card').textContent).toContain('1 分 5 秒')
   })
 
   it('renders stopped non-agent background tasks as neutral transcript events', () => {
@@ -3981,7 +4054,42 @@ describe('MessageList nested tool calls', () => {
         sessions: {
           [ACTIVE_TAB]: makeSessionState({
             messages,
+            chatState: 'idle',
+            backgroundAgentTasks: {
+              'agent-task-1': {
+                taskId: 'agent-task-1',
+                status: 'running',
+                taskType: 'local_agent',
+                description: 'Review screenshots',
+                startedAt: 1,
+                updatedAt: 2,
+              },
+            },
+          }),
+        },
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByText('first.ts')).toBeNull()
+    })
+
+    act(() => {
+      useChatStore.setState({
+        sessions: {
+          [ACTIVE_TAB]: makeSessionState({
+            messages,
             chatState: 'thinking',
+            backgroundAgentTasks: {
+              'agent-task-1': {
+                taskId: 'agent-task-1',
+                status: 'completed',
+                taskType: 'local_agent',
+                description: 'Review screenshots',
+                startedAt: 1,
+                updatedAt: 3,
+              },
+            },
           }),
         },
       })
@@ -3990,6 +4098,67 @@ describe('MessageList nested tool calls', () => {
     await waitFor(() => {
       expect(screen.getByText('first.ts')).toBeTruthy()
     })
+  })
+
+  it('does not load turn change cards while background tasks are still running', async () => {
+    const getTurnCheckpoints = vi.spyOn(sessionsApi, 'getTurnCheckpoints').mockResolvedValue({
+      checkpoints: [
+        {
+          target: {
+            targetUserMessageId: 'user-1',
+            userMessageIndex: 0,
+            userMessageCount: 1,
+          },
+          code: {
+            available: true,
+            filesChanged: ['src/first.ts'],
+            insertions: 1,
+            deletions: 0,
+          },
+        },
+      ],
+    })
+
+    useChatStore.setState({
+      sessions: {
+        [ACTIVE_TAB]: makeSessionState({
+          messages: [
+            {
+              id: 'user-1',
+              type: 'user_text',
+              content: '第一轮',
+              timestamp: 1,
+            },
+            {
+              id: 'assistant-1',
+              type: 'assistant_text',
+              content: 'done',
+              timestamp: 2,
+            },
+          ],
+          chatState: 'idle',
+          backgroundAgentTasks: {
+            'agent-task-1': {
+              taskId: 'agent-task-1',
+              status: 'running',
+              taskType: 'local_agent',
+              description: 'Review screenshots',
+              startedAt: 1,
+              updatedAt: 2,
+            },
+          },
+        }),
+      },
+    })
+
+    render(<MessageList />)
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(getTurnCheckpoints).not.toHaveBeenCalled()
+    expect(screen.queryByText('first.ts')).toBeNull()
   })
 
   it('confirms before rewinding to an earlier turn from a historical change card', async () => {

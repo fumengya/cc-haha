@@ -36,6 +36,7 @@ import { writeWindowSmokeSnapshot } from './services/windowSmoke'
 import {
   installWindowLifecycle,
   readWindowState,
+  refreshWindowsDragHitTest,
   restoreWindowMaximized,
   saveWindowState,
   showMainWindow,
@@ -390,6 +391,7 @@ async function createMainWindow() {
 
   restoreWindowMaximized(mainWindow, restoredState)
   showMainWindow(mainWindow, app)
+  refreshWindowsDragHitTest(mainWindow, process.platform)
   writeWindowSmokeSnapshot(mainWindow, 'after-final-show')
 }
 

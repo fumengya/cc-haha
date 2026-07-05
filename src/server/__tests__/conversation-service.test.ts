@@ -334,6 +334,8 @@ describe('ConversationService', () => {
     expect(env.API_TIMEOUT_MS).toBe('180000')
     expect(env.HTTP_PROXY).toBe('http://127.0.0.1:7890')
     expect(env.HTTPS_PROXY).toBe('http://127.0.0.1:7890')
+    expect(env.NO_PROXY).toContain('127.0.0.1')
+    expect(env.no_proxy).toContain('localhost')
   })
 
   test('buildChildEnv ties the first-token watchdog to the user request timeout so slow prefill is not killed early (#826)', async () => {

@@ -343,7 +343,7 @@ describe('Settings > General tab', () => {
       updateH5AccessSettings: vi.fn(),
     })
 
-    useUIStore.setState({ pendingSettingsTab: null, toasts: [] })
+    useUIStore.setState({ activeSettingsTab: 'providers', pendingSettingsTab: null, toasts: [] })
     useUpdateStore.setState({
       status: 'idle',
       availableVersion: null,
@@ -368,6 +368,18 @@ describe('Settings > General tab', () => {
 
     const toggle = screen.getByLabelText('Skip WebFetch domain preflight')
     expect(toggle).toBeChecked()
+  })
+
+  it('keeps the selected settings tab when returning to Settings', () => {
+    const { unmount } = render(<Settings />)
+
+    fireEvent.click(screen.getByText('General'))
+    expect(screen.getByLabelText('Skip WebFetch domain preflight')).toBeInTheDocument()
+
+    unmount()
+    render(<Settings />)
+
+    expect(screen.getByLabelText('Skip WebFetch domain preflight')).toBeInTheDocument()
   })
 
   it('offers the pure white appearance theme', () => {
@@ -1491,6 +1503,7 @@ describe('Settings > Providers tab', () => {
     MOCK_DELETE_PROVIDER.mockReset()
     MOCK_GET_SETTINGS.mockResolvedValue({})
     MOCK_UPDATE_SETTINGS.mockResolvedValue({})
+    useUIStore.setState({ activeSettingsTab: 'providers', pendingSettingsTab: null, toasts: [] })
     useSettingsStore.setState({
       locale: 'en',
       fetchAll: vi.fn().mockResolvedValue(undefined),
@@ -1698,13 +1711,171 @@ describe('Settings > Providers tab', () => {
     })
   })
 
-  // The provider-form Tool Search toggle is intentionally hidden (see Settings.tsx
-  // "ToolSearch toggle hidden": third-party proxies don't support the beta header,
-  // and the CLI auto-detects first-party hosts via toolSearch.ts). The toggle UI is
-  // gone, but Anthropic-format providers still persist the default-on value so
-  // first-party hosts keep Tool Search. This guards that contract after the toggle
-  // was removed.
-  it('hides the Tool Search toggle and persists default-on for Anthropic providers', async () => {
+  it('uses request model env instead of cc-switch display model names when testing pasted settings JSON', async () => {
+    providerStoreState.testConfig = vi.fn().mockResolvedValue({
+      connectivity: {
+        success: false,
+        latencyMs: 3,
+        error: '未配置供应商',
+        modelUsed: 'claude-sonnet-4-6',
+        httpStatus: 503,
+      },
+    })
+    providerStoreState.presets = [
+      {
+        id: 'deepseek',
+        name: 'DeepSeek',
+        baseUrl: 'https://api.deepseek.com/anthropic',
+        apiFormat: 'anthropic',
+        defaultModels: {
+          main: 'deepseek-v4-pro',
+          haiku: 'deepseek-v4-flash',
+          sonnet: 'deepseek-v4-pro',
+          opus: 'deepseek-v4-pro',
+        },
+        needsApiKey: true,
+        websiteUrl: '',
+      },
+      {
+        id: 'custom',
+        name: 'Custom',
+        baseUrl: '',
+        apiFormat: 'anthropic',
+        defaultModels: {
+          main: '',
+          haiku: '',
+          sonnet: '',
+          opus: '',
+        },
+        needsApiKey: true,
+        websiteUrl: '',
+      },
+    ]
+
+    render(<Settings />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Add Provider|添加服务商/i }))
+    const dialog = screen.getByRole('dialog')
+    const settingsTextarea = await waitFor(() => {
+      const textarea = dialog.querySelector('textarea')
+      expect(textarea?.value).toContain('"ANTHROPIC_MODEL"')
+      return textarea as HTMLTextAreaElement
+    })
+
+    fireEvent.change(settingsTextarea, {
+      target: {
+        value: JSON.stringify({
+          env: {
+            ANTHROPIC_API_KEY: 'PROXY_MANAGED',
+            ANTHROPIC_BASE_URL: 'http://127.0.0.1:15721',
+            ANTHROPIC_DEFAULT_FABLE_MODEL: 'Qwen3Coder',
+            ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5',
+            ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME: 'Qwen3Coder',
+            ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-8',
+            ANTHROPIC_DEFAULT_OPUS_MODEL_NAME: 'Qwen3Coder',
+            ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4-6',
+            ANTHROPIC_DEFAULT_SONNET_MODEL_NAME: 'Qwen3Coder',
+          },
+        }, null, 2),
+      },
+    })
+
+    await waitFor(() => {
+      expect(within(dialog).getByLabelText(/Main Model|主模型/i)).toHaveValue('claude-sonnet-4-6')
+      expect(within(dialog).getByLabelText(/Haiku Model/i)).toHaveValue('claude-haiku-4-5')
+      expect(within(dialog).getByLabelText(/Opus Model/i)).toHaveValue('claude-opus-4-8')
+    })
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /Test Connection/i }))
+
+    await waitFor(() => {
+      expect(providerStoreState.testConfig).toHaveBeenCalledWith(expect.objectContaining({
+        baseUrl: 'http://127.0.0.1:15721',
+        apiKey: 'PROXY_MANAGED',
+        modelId: 'claude-sonnet-4-6',
+        authStrategy: 'api_key',
+        apiFormat: 'anthropic',
+      }))
+    })
+    expect(providerStoreState.testConfig).not.toHaveBeenCalledWith(expect.objectContaining({
+      modelId: 'Qwen3Coder',
+    }))
+    expect(providerStoreState.testConfig).not.toHaveBeenCalledWith(expect.objectContaining({
+      modelId: 'deepseek-v4-pro',
+    }))
+  })
+
+  it('keeps the provider form locked while save is in flight', async () => {
+    let resolveCreate!: (provider: SavedProvider) => void
+    providerStoreState.createProvider = vi.fn().mockImplementation(() => new Promise<SavedProvider>((resolve) => {
+      resolveCreate = resolve
+    }))
+    providerStoreState.presets = [
+      {
+        id: 'custom',
+        name: 'Custom',
+        baseUrl: 'https://api.example.com/anthropic',
+        apiFormat: 'anthropic',
+        defaultModels: {
+          main: 'custom-main',
+          haiku: '',
+          sonnet: '',
+          opus: '',
+        },
+        needsApiKey: true,
+        websiteUrl: '',
+      },
+    ]
+
+    render(<Settings />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Add Provider|添加服务商/i }))
+    const dialog = screen.getByRole('dialog')
+    await waitFor(() => {
+      const settingsTextarea = dialog.querySelector('textarea')
+      expect(settingsTextarea?.value).toContain('"ANTHROPIC_MODEL"')
+    })
+
+    fireEvent.change(within(dialog).getByPlaceholderText('sk-...'), { target: { value: 'sk-test' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: /Save|Add|保存|添加/i }))
+
+    await waitFor(() => {
+      expect(providerStoreState.createProvider).toHaveBeenCalledTimes(1)
+    })
+
+    const cancelButton = within(dialog).getByRole('button', { name: /Cancel|取消/i })
+    expect(cancelButton).toBeDisabled()
+
+    fireEvent.click(cancelButton)
+    fireEvent.click(within(dialog).getByRole('button', { name: /Save|Add|保存|添加/i }))
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(providerStoreState.createProvider).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolveCreate({
+        id: 'provider-new',
+        presetId: 'custom',
+        name: 'Custom',
+        apiKey: 'sk-test',
+        baseUrl: 'https://api.example.com/anthropic',
+        apiFormat: 'anthropic',
+        models: {
+          main: 'custom-main',
+          haiku: 'custom-main',
+          sonnet: 'custom-main',
+          opus: 'custom-main',
+        },
+      })
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+  })
+
+  it('defaults Tool Search on and persists an explicit disable from the provider form', async () => {
     MOCK_GET_SETTINGS.mockResolvedValue({ env: { EXISTING_ENV: '1' } })
     providerStoreState.createProvider = vi.fn().mockResolvedValue({
       id: 'provider-new',
@@ -1874,7 +2045,7 @@ describe('Settings > Providers tab', () => {
 
 describe('Settings > About tab', () => {
   beforeEach(() => {
-    useUIStore.setState({ pendingSettingsTab: 'about' })
+    useUIStore.setState({ activeSettingsTab: 'providers', pendingSettingsTab: 'about' })
     useSettingsStore.setState({
       locale: 'en',
       updateProxy: { mode: 'system', url: '' },

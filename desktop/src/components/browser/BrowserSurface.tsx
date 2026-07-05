@@ -60,6 +60,8 @@ export function BrowserSurface({ sessionId }: { sessionId: string }) {
   const t = useTranslation()
   const hostRef = useRef<HTMLDivElement>(null)
   const loadSeqRef = useRef(0)
+  const requestedUrlRef = useRef<string | null>(null)
+  const hasNativePreviewRef = useRef(false)
   const session = useBrowserPanelStore((s) => s.bySession[sessionId])
   const store = useBrowserPanelStore.getState()
   const overlayCount = useOverlayStore((s) => s.count)
@@ -84,26 +86,55 @@ export function BrowserSurface({ sessionId }: { sessionId: string }) {
       await action()
     })().catch(() => {
       if (loadSeqRef.current === seq) {
+        if (requestedUrlRef.current === url) {
+          requestedUrlRef.current = null
+        }
         useBrowserPanelStore.getState().setLoading(sessionId, false)
       }
     })
   }
 
+  const requestNativePreview = (url: string, options?: { force?: boolean }) => {
+    if (!url) return
+    if (!options?.force && requestedUrlRef.current === url) return
+
+    requestedUrlRef.current = url
+    loadNativePreview(url, async () => {
+      if (hasNativePreviewRef.current) {
+        await previewBridge.navigate(url)
+        return
+      }
+
+      const el = hostRef.current
+      hasNativePreviewRef.current = true
+      if (el) {
+        await previewBridge.open(url, computeWebviewBounds(el.getBoundingClientRect()))
+      } else {
+        await previewBridge.navigate(url)
+      }
+    })
+  }
+
   useLayoutEffect(() => {
-    const el = hostRef.current
-    if (el && session?.url) {
-      const bounds = computeWebviewBounds(el.getBoundingClientRect())
-      const url = session.url
-      loadNativePreview(url, () => previewBridge.open(url, bounds))
+    if (session?.url) {
+      requestNativePreview(session.url)
     }
     return () => {
       loadSeqRef.current += 1
+      requestedUrlRef.current = null
+      hasNativePreviewRef.current = false
       previewBridge.close()
     }
     // The visibility-sync effect below owns setVisible() — including the
     // initial reveal — so it always factors in overlayCount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId])
+
+  useEffect(() => {
+    if (!session?.url || !session.loading) return
+    requestNativePreview(session.url)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.url, session?.loading, sessionId])
 
   // Visibility-sync: a fullscreen DOM overlay (e.g. ImageGalleryModal) would
   // otherwise be partially covered by the native child webview, which always
@@ -148,19 +179,8 @@ export function BrowserSurface({ sessionId }: { sessionId: string }) {
   const openOrNavigate = (inputUrl: string) => {
     const url = resolveBrowserNavigationUrl(inputUrl, sessionId)
     if (!url) return
-    const current = useBrowserPanelStore.getState().bySession[sessionId]
     store.navigate(sessionId, url)
-    if (current?.url) {
-      loadNativePreview(url, () => previewBridge.navigate(url))
-      return
-    }
-    const el = hostRef.current
-    if (el) {
-      const bounds = computeWebviewBounds(el.getBoundingClientRect())
-      loadNativePreview(url, () => previewBridge.open(url, bounds))
-    } else {
-      loadNativePreview(url, () => previewBridge.navigate(url))
-    }
+    requestNativePreview(url)
   }
 
   const actionButtonClass = [
@@ -216,18 +236,18 @@ export function BrowserSurface({ sessionId }: { sessionId: string }) {
           store.goBack(sessionId)
           store.setLoading(sessionId, true)
           const url = useBrowserPanelStore.getState().bySession[sessionId]!.url
-          loadNativePreview(url, () => previewBridge.navigate(url))
+          requestNativePreview(url)
         }}
         onForward={() => {
           store.goForward(sessionId)
           store.setLoading(sessionId, true)
           const url = useBrowserPanelStore.getState().bySession[sessionId]!.url
-          loadNativePreview(url, () => previewBridge.navigate(url))
+          requestNativePreview(url)
         }}
         onReload={() => {
           if (!session.url) return
           store.setLoading(sessionId, true)
-          loadNativePreview(session.url, () => previewBridge.navigate(session.url))
+          requestNativePreview(session.url, { force: true })
         }}
         rightActions={previewActions}
       />

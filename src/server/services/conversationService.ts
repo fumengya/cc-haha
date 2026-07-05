@@ -1165,7 +1165,7 @@ export class ConversationService {
     const explicitProviderEnv = explicitProvider
       ? await this.providerService.getProviderRuntimeEnv(explicitProvider.id)
       : null
-    const networkEnv = buildNetworkEnvironment(await loadNetworkSettings())
+    const networkEnv = buildNetworkEnvironment(await loadNetworkSettings(), cleanEnv)
     const traceCaptureEnabled = (await readTraceCaptureSettings()).enabled
     if (explicitProviderEnv && options?.model?.trim()) {
       explicitProviderEnv.ANTHROPIC_MODEL = options.model.trim()

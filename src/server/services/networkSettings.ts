@@ -34,6 +34,7 @@ const DEFAULT_NETWORK_SETTINGS: NetworkSettings = {
     url: '',
   },
 }
+const LOOPBACK_NO_PROXY_ENTRIES = ['localhost', '127.0.0.1', '::1'] as const
 
 function isNetworkProxyMode(value: unknown): value is NetworkProxyMode {
   return value === 'system' || value === 'manual'
@@ -85,17 +86,37 @@ export function getManualNetworkProxyUrl(settings: NetworkSettings): string | un
   return url || undefined
 }
 
-export function buildNetworkEnvironment(settings: NetworkSettings): Record<string, string> {
+export function mergeLoopbackNoProxy(existing: string | undefined): string {
+  const entries = (existing ?? '')
+    .split(/[,\s]+/)
+    .map(entry => entry.trim())
+    .filter(Boolean)
+  const lowerEntries = new Set(entries.map(entry => entry.toLowerCase()))
+
+  for (const entry of LOOPBACK_NO_PROXY_ENTRIES) {
+    if (!lowerEntries.has(entry.toLowerCase())) entries.push(entry)
+  }
+
+  return entries.join(',')
+}
+
+export function buildNetworkEnvironment(
+  settings: NetworkSettings,
+  baseEnv: NodeJS.ProcessEnv = process.env,
+): Record<string, string> {
   const env: Record<string, string> = {
     API_TIMEOUT_MS: String(settings.aiRequestTimeoutMs),
   }
   const proxyUrl = getManualNetworkProxyUrl(settings)
 
   if (proxyUrl) {
+    const noProxy = mergeLoopbackNoProxy(baseEnv.no_proxy || baseEnv.NO_PROXY)
     env.HTTP_PROXY = proxyUrl
     env.HTTPS_PROXY = proxyUrl
     env.http_proxy = proxyUrl
     env.https_proxy = proxyUrl
+    env.NO_PROXY = noProxy
+    env.no_proxy = noProxy
   }
 
   return env

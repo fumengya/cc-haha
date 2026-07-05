@@ -637,6 +637,57 @@ describe('SessionService', () => {
     expect(scanCount).toBe(3)
   })
 
+  it('should reuse unchanged file summaries after the list response cache is cleared', async () => {
+    const sessionFiles: Array<{ id: string; filePath: string }> = []
+    for (let i = 0; i < 3; i++) {
+      const id = `2500000${i.toString(16)}-bbbb-cccc-dddd-eeeeeeeeeeee`
+      const filePath = await writeSessionFile('-tmp-file-summary-cache', id, [
+        makeSnapshotEntry(),
+        makeUserEntry(`Cached file summary ${i}`),
+      ])
+      const mtime = new Date(Date.now() - i * 1000)
+      await fs.utimes(filePath, mtime, mtime)
+      sessionFiles.push({ id, filePath })
+    }
+
+    const serviceWithSpy = service as unknown as {
+      scanSessionListSummary: (...args: unknown[]) => Promise<unknown>
+    }
+    const serviceInternals = service as unknown as {
+      sessionListCache: Map<string, unknown>
+    }
+    const originalScanSessionListSummary = serviceWithSpy.scanSessionListSummary.bind(service)
+    let scanCount = 0
+    serviceWithSpy.scanSessionListSummary = async (...args) => {
+      scanCount += 1
+      return originalScanSessionListSummary(...args)
+    }
+
+    await service.listSessions({ limit: 3, offset: 0 })
+    expect(scanCount).toBe(3)
+
+    serviceInternals.sessionListCache.clear()
+    const second = await service.listSessions({ limit: 3, offset: 0 })
+    expect(second.sessions).toHaveLength(3)
+    expect(scanCount).toBe(3)
+
+    await fs.appendFile(
+      sessionFiles[1]!.filePath,
+      `${JSON.stringify({
+        type: 'custom-title',
+        customTitle: 'Changed cached file summary',
+        timestamp: new Date().toISOString(),
+      })}\n`,
+      'utf-8',
+    )
+    serviceInternals.sessionListCache.clear()
+
+    const third = await service.listSessions({ limit: 3, offset: 0 })
+    expect(third.sessions.find((session) => session.id === sessionFiles[1]!.id)?.title)
+      .toBe('Changed cached file summary')
+    expect(scanCount).toBe(4)
+  })
+
   it('should invalidate cached list metadata after writes', async () => {
     const sessionId = '30000000-bbbb-cccc-dddd-eeeeeeeeeeee'
     await writeSessionFile('-tmp-cache-invalidation', sessionId, [
@@ -951,6 +1002,16 @@ describe('SessionService', () => {
         timestamp: '2026-01-01T00:00:02.000Z',
         uuid: 'goal-output',
       },
+      {
+        parentUuid: 'goal-output',
+        isSidechain: false,
+        type: 'system',
+        subtype: 'local_command',
+        content: '<local-command-stdout>Goal continuing: verify persisted follow-up</local-command-stdout>',
+        level: 'info',
+        timestamp: '2026-01-01T00:00:03.000Z',
+        uuid: 'goal-continuing',
+      },
       makeAssistantEntry('正常助手消息', crypto.randomUUID()),
     ])
 
@@ -966,6 +1027,11 @@ describe('SessionService', () => {
         id: 'goal-output',
         type: 'system',
         content: expect.stringContaining('Goal set: ship persisted goal'),
+      },
+      {
+        id: 'goal-continuing',
+        type: 'system',
+        content: expect.stringContaining('Goal continuing: verify persisted follow-up'),
       },
       {
         type: 'assistant',

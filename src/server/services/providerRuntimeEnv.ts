@@ -372,6 +372,23 @@ export function readActiveProviderManagedEnv(
   }
 }
 
+export function activeProviderNeedsProxy(configDir: string): boolean {
+  try {
+    const raw = fs.readFileSync(path.join(configDir, 'cc-haha', 'providers.json'), 'utf-8')
+    const index = normalizeProvidersIndex(JSON.parse(raw))
+    if (!index?.activeId || isOpenAIOfficialProviderId(index.activeId)) {
+      return false
+    }
+
+    const provider = index.providers.find((entry) => entry.id === index.activeId)
+    if (!provider) return false
+
+    return (provider.apiFormat ?? 'anthropic') !== 'anthropic'
+  } catch {
+    return false
+  }
+}
+
 export function mergeActiveProviderManagedEnv(
   settingsEnv: Record<string, string>,
   configDir: string,

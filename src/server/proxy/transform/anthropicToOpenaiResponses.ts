@@ -17,6 +17,7 @@ import { stripLeadingBillingHeader } from './billingHeader.js'
 export type OpenAIResponsesTransformOptions = {
   /** Stable cache routing key, forwarded as `prompt_cache_key`. */
   cacheKey?: string
+  passSamplingParams?: boolean
 }
 
 /**
@@ -59,9 +60,12 @@ export function anthropicToOpenaiResponses(
   // max_tokens — omit to let upstream provider use its own default/max.
   // Claude Code sends very large values that exceed many providers' limits.
 
-  // temperature & top_p
-  if (body.temperature !== undefined) result.temperature = body.temperature
-  if (body.top_p !== undefined) result.top_p = body.top_p
+  // Claude Code sends Anthropic sampling params that some compatible
+  // providers reject. Keep them opt-in for providers known to accept them.
+  if (options.passSamplingParams) {
+    if (body.temperature !== undefined) result.temperature = body.temperature
+    if (body.top_p !== undefined) result.top_p = body.top_p
+  }
 
   // tools
   if (body.tools && body.tools.length > 0) {

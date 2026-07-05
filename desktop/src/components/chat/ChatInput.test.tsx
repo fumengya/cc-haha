@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '@testing-library/jest-dom'
 import { act } from 'react'
 
@@ -208,6 +208,10 @@ describe('ChatInput file mentions', () => {
     mocks.listAgents.mockResolvedValue({ activeAgents: [], allAgents: [] })
   })
 
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('keeps unsent composer drafts isolated when switching between session tabs', async () => {
     const historySessionId = 'history-session'
     useTabStore.setState({
@@ -320,6 +324,73 @@ describe('ChatInput file mentions', () => {
     await waitFor(() => {
       expect(input.value).toBe('history tab draft')
     })
+  })
+
+  it('keeps the unsent draft when switching project on an empty active session', async () => {
+    installElectronFileHost()
+    mocks.dialogOpen.mockResolvedValueOnce('/other')
+    mocks.create.mockResolvedValueOnce({ sessionId: 'session-project-switch', workDir: '/other' })
+    mocks.getRepositoryContext.mockImplementation(async (workDir: string) => ({
+      ...okRepositoryContext(),
+      workDir,
+      repoRoot: workDir,
+      repoName: workDir.split('/').filter(Boolean).pop() ?? 'repo',
+    }))
+    useSessionStore.setState({
+      sessions: [{
+        id: sessionId,
+        title: 'Project',
+        createdAt: '2026-05-01T00:00:00.000Z',
+        modifiedAt: '2026-05-01T00:00:00.000Z',
+        messageCount: 0,
+        projectPath: '/repo',
+        workDir: '/repo',
+        workDirExists: true,
+      }],
+      activeSessionId: sessionId,
+    })
+    useChatStore.setState({
+      sessions: {
+        [sessionId]: {
+          messages: [],
+          chatState: 'idle',
+          connectionState: 'connected',
+          streamingText: '',
+          streamingToolInput: '',
+          activeToolUseId: null,
+          activeToolName: null,
+          activeThinkingId: null,
+          pendingPermission: null,
+          pendingComputerUsePermission: null,
+          tokenUsage: { input_tokens: 0, output_tokens: 0 },
+          streamingResponseChars: 0,
+          elapsedSeconds: 0,
+          statusVerb: '',
+          slashCommands: [],
+          agentTaskNotifications: {},
+          elapsedTimer: null,
+        },
+      },
+    })
+
+    render(<ChatInput variant="hero" />)
+
+    const input = screen.getByRole('textbox') as HTMLTextAreaElement
+    fireEvent.change(input, {
+      target: { value: 'draft before switching project', selectionStart: 30 },
+    })
+
+    fireEvent.click(screen.getAllByTitle('/repo')[0]!)
+    await screen.findByTestId('directory-picker-menu')
+    fireEvent.click(screen.getByRole('button', { name: /Choose a different folder/ }))
+
+    await waitFor(() => {
+      expect(mocks.create).toHaveBeenCalledWith({ workDir: '/other' })
+    })
+    await waitFor(() => {
+      expect(useTabStore.getState().activeTabId).toBe('session-project-switch')
+    })
+    expect(input.value).toBe('draft before switching project')
   })
 
   it('restores an unsent composer draft after the composer unmounts', async () => {
@@ -1088,6 +1159,57 @@ describe('ChatInput file mentions', () => {
           data: undefined,
         }),
       ],
+    })
+  })
+
+  it('ignores pasted images that finish loading after the prompt was sent', async () => {
+    class DeferredFileReader {
+      result: string | ArrayBuffer | null = null
+      onload: ((event: ProgressEvent<FileReader>) => void) | null = null
+
+      readAsDataURL(file: Blob) {
+        pendingReaders.push({ reader: this, file })
+      }
+    }
+    const pendingReaders: Array<{ reader: DeferredFileReader; file: Blob }> = []
+    vi.stubGlobal('FileReader', DeferredFileReader)
+
+    render(<ChatInput compact />)
+
+    const input = screen.getByRole('textbox') as HTMLTextAreaElement
+    const file = new File(['image'], 'late.png', { type: 'image/png' })
+
+    fireEvent.paste(input, {
+      clipboardData: {
+        items: [{
+          type: 'image/png',
+          getAsFile: () => file,
+        }],
+      },
+    })
+    expect(pendingReaders).toHaveLength(1)
+
+    fireEvent.change(input, {
+      target: {
+        value: 'send now',
+        selectionStart: 'send now'.length,
+      },
+    })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    expect(mocks.wsSend).toHaveBeenCalledWith(sessionId, {
+      type: 'user_message',
+      content: 'send now',
+      attachments: [],
+    })
+
+    act(() => {
+      pendingReaders[0]!.reader.result = 'data:image/png;base64,LATE'
+      pendingReaders[0]!.reader.onload?.({} as ProgressEvent<FileReader>)
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByAltText(/pasted-image-/)).not.toBeInTheDocument()
     })
   })
 

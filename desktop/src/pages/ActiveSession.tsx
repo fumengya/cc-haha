@@ -29,15 +29,17 @@ import { ChatInput } from '../components/chat/ChatInput'
 import { ComputerUsePermissionModal } from '../components/chat/ComputerUsePermissionModal'
 import { SessionTaskBar } from '../components/chat/SessionTaskBar'
 import { SoloCouncilPanel } from '../components/chat/SoloCouncilPanel'
+import { BackgroundTasksBar } from '../components/chat/BackgroundTasksBar'
 import { WorkbenchPanel } from '../components/workbench/WorkbenchPanel'
 import { TeamStatusBar } from '../components/teams/TeamStatusBar'
 import { TerminalSettings } from './TerminalSettings'
 import type { SessionListItem } from '../types/session'
-import type { ActiveGoalState } from '../types/chat'
+import type { ActiveGoalState, TokenUsage } from '../types/chat'
 import { useMobileViewport } from '../hooks/useMobileViewport'
 import { isDesktopRuntime } from '../lib/desktopRuntime'
 import { formatTokenCount } from '../lib/formatTokenCount'
 import { publicAssetPath } from '../lib/publicAsset'
+import {
 import {
   COMPOSER_PREFILL_EVENT,
   WelcomeTaskCards,
@@ -45,12 +47,17 @@ import {
   type WelcomeTaskCard,
 } from '../components/welcome/WelcomeTaskCards'
 import { RecentActivityCard } from '../components/welcome/RecentActivityCard'
+import {
+  createBackgroundTaskDismissKey,
+  hasRunningBackgroundTasks as hasAnyRunningBackgroundTasks,
+} from '../lib/backgroundTasks'
 
 const TASK_POLL_INTERVAL_MS = 1000
 const WORKSPACE_RESIZE_STEP = 32
 const TERMINAL_RESIZE_STEP = 24
 const CHAT_COLUMN_WITH_WORKSPACE_CLASS =
   'min-w-[320px] flex-1 border-r border-[var(--color-border)] bg-[var(--color-surface)]'
+const EMPTY_DISMISSED_BACKGROUND_TASK_KEYS = new Set<string>()
 
 function isSessionTabState(activeTabId: string | null, activeTabType: TabType | null | undefined) {
   if (!activeTabId) return false
@@ -61,6 +68,15 @@ function isSessionTabState(activeTabId: string | null, activeTabType: TabType | 
     !activeTabId.startsWith(TERMINAL_TAB_PREFIX) &&
     !activeTabId.startsWith(TRACE_TAB_PREFIX) &&
     !activeTabId.startsWith(WORKBENCH_TAB_PREFIX)
+}
+
+function getTokenUsageTotal(usage: TokenUsage): number {
+  return (
+    usage.input_tokens +
+    usage.output_tokens +
+    (usage.cache_read_tokens ?? 0) +
+    (usage.cache_creation_tokens ?? 0)
+  )
 }
 
 function getSessionTerminalCwd(session: SessionListItem | undefined) {
@@ -275,6 +291,7 @@ function TerminalResizeHandle() {
 export function ActiveSession() {
   const isMobileLayout = useMobileViewport() && !isDesktopRuntime()
   const activeTabId = useTabStore((s) => s.activeTabId)
+  const [dismissedBackgroundTaskKeysBySession, setDismissedBackgroundTaskKeysBySession] = useState<Record<string, Set<string>>>({})
   const activeTabType = useTabStore((s) => s.tabs.find((tab) => tab.sessionId === s.activeTabId)?.type ?? null)
   const sessions = useSessionStore((s) => s.sessions)
   const connectToSession = useChatStore((s) => s.connectToSession)
@@ -303,8 +320,7 @@ export function ActiveSession() {
   const hasRunningTasks = useCLITaskStore((s) => s.tasks.some((task) => task.status === 'in_progress'))
   const chatState = sessionState?.chatState ?? 'idle'
   const tokenUsage = sessionState?.tokenUsage ?? { input_tokens: 0, output_tokens: 0 }
-  const hasRunningBackgroundTasks = Object.values(sessionState?.backgroundAgentTasks ?? {})
-    .some((task) => task.status === 'running')
+  const hasRunningBackgroundTasks = hasAnyRunningBackgroundTasks(sessionState?.backgroundAgentTasks)
 
   const session = sessions.find((s) => s.id === activeTabId)
   const memberInfo = useTeamStore((s) => activeTabId ? s.getMemberBySessionId(activeTabId) : null)
@@ -363,6 +379,13 @@ export function ActiveSession() {
   const t = useTranslation()
   const messages = sessionState?.messages ?? []
   const streamingText = sessionState?.streamingText ?? ''
+  const backgroundTasks = useMemo(
+    () => Object.values(sessionState?.backgroundAgentTasks ?? {}),
+    [sessionState?.backgroundAgentTasks],
+  )
+  const dismissedBackgroundTaskKeys = activeTabId
+    ? dismissedBackgroundTaskKeysBySession[activeTabId] ?? EMPTY_DISMISSED_BACKGROUND_TASK_KEYS
+    : EMPTY_DISMISSED_BACKGROUND_TASK_KEYS
   const activeGoal = sessionState?.activeGoal ?? null
   const isEmpty = messages.length === 0 && !streamingText && (session?.messageCount ?? 0) === 0
   const compactEmptyHero = isEmpty && showTerminalPanel
@@ -383,7 +406,7 @@ export function ActiveSession() {
   const isActive = chatState !== 'idle' ||
     (trackedTaskSessionId === activeTabId && hasRunningTasks) ||
     hasRunningBackgroundTasks
-  const totalTokens = tokenUsage.input_tokens + tokenUsage.output_tokens
+  const totalTokens = getTokenUsageTotal(tokenUsage)
 
   const lastUpdated = useMemo(() => {
     if (!session?.modifiedAt) return ''
@@ -393,6 +416,23 @@ export function ActiveSession() {
     if (diff < 86400000) return t('session.timeHours', { n: Math.floor(diff / 3600000) })
     return t('session.timeDays', { n: Math.floor(diff / 86400000) })
   }, [session?.modifiedAt, t])
+
+  useEffect(() => {
+    if (!activeTabId || dismissedBackgroundTaskKeys.size === 0) return
+    const currentTaskKeys = new Set(backgroundTasks.map(createBackgroundTaskDismissKey))
+    const nextDismissed = new Set([...dismissedBackgroundTaskKeys].filter((taskKey) => currentTaskKeys.has(taskKey)))
+    if (nextDismissed.size === dismissedBackgroundTaskKeys.size) return
+
+    setDismissedBackgroundTaskKeysBySession((current) => {
+      const next = { ...current }
+      if (nextDismissed.size === 0) {
+        delete next[activeTabId]
+      } else {
+        next[activeTabId] = nextDismissed
+      }
+      return next
+    })
+  }, [activeTabId, backgroundTasks, dismissedBackgroundTaskKeys])
 
   if (!activeTabId) return null
 
@@ -728,6 +768,25 @@ export function ActiveSession() {
           {!isMemberSession && <SessionTaskBar />}
 
           <TeamStatusBar />
+
+          {!isMemberSession && (
+            <BackgroundTasksBar
+              key={activeTabId}
+              tasks={backgroundTasks}
+              compact={showRightPanel}
+              dismissedFinishedTaskKeys={dismissedBackgroundTaskKeys}
+              onClearFinished={(taskKeys) => {
+                if (!activeTabId || taskKeys.length === 0) return
+                setDismissedBackgroundTaskKeysBySession((current) => ({
+                  ...current,
+                  [activeTabId]: new Set([
+                    ...(current[activeTabId] ?? EMPTY_DISMISSED_BACKGROUND_TASK_KEYS),
+                    ...taskKeys,
+                  ]),
+                }))
+              }}
+            />
+          )}
 
           <ChatInput
             variant={isEmpty && !isMemberSession && !showRightPanel ? 'hero' : 'default'}

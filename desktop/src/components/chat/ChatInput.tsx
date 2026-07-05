@@ -130,6 +130,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
   const previousActiveTabIdRef = useRef<string | null>(null)
   const inputRef = useRef(input)
   const attachmentsRef = useRef(attachments)
+  const pasteGenerationRef = useRef(0)
   const setComposerInput = useCallback((value: string) => {
     inputRef.current = value
     setInput(value)
@@ -201,6 +202,9 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
     }
     chatStore.setComposerDraft(sessionId, draft)
   }, [])
+  const invalidatePendingPastes = useCallback(() => {
+    pasteGenerationRef.current += 1
+  }, [])
 
   const isMemberSession = !!memberInfo
   const isActive = chatState !== 'idle'
@@ -247,6 +251,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
     }
 
     const nextDraft = activeTabId ? useChatStore.getState().sessions[activeTabId]?.composerDraft : undefined
+    invalidatePendingPastes()
     setComposerInput(nextDraft?.input ?? '')
     setComposerAttachments(nextDraft?.attachments ?? [])
     setPlusMenuOpen(false)
@@ -259,7 +264,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
     setEditingQueuedMessageId(null)
     setEditingQueuedMessageText('')
     previousActiveTabIdRef.current = activeTabId
-  }, [activeTabId, saveComposerDraft, setComposerAttachments, setComposerInput])
+  }, [activeTabId, invalidatePendingPastes, saveComposerDraft, setComposerAttachments, setComposerInput])
 
   useEffect(() => {
     return () => {
@@ -625,11 +630,17 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
     const oldId = activeTabId
     const { createSession, deleteSession } = useSessionStore.getState()
     const { replaceTabSession } = useTabStore.getState()
-    const { disconnectSession, connectToSession } = useChatStore.getState()
+    const { disconnectSession, connectToSession, setComposerDraft } = useChatStore.getState()
     const newId = await createSession(
       workDir || undefined,
       repository ? { repository } : undefined,
     )
+    if (inputRef.current.length > 0 || attachmentsRef.current.length > 0) {
+      setComposerDraft(newId, {
+        input: inputRef.current,
+        attachments: attachmentsRef.current,
+      })
+    }
     useSessionRuntimeStore.getState().moveSelection(oldId, newId)
     disconnectSession(oldId)
     replaceTabSession(oldId, newId)
@@ -781,6 +792,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
         displayAttachments: visibleAttachmentPayload,
       })
     }
+    invalidatePendingPastes()
     setComposerInput('')
     setComposerAttachments([])
     useChatStore.getState().clearComposerDraft(activeTabId!)
@@ -904,10 +916,16 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
       if (!file) continue
 
       const id = `att-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const pasteGeneration = pasteGenerationRef.current
+      const pastedSessionId = activeTabId
       const reader = new FileReader()
       reader.onload = () => {
+        if (pasteGeneration !== pasteGenerationRef.current) return
+        if (pastedSessionId !== useTabStore.getState().activeTabId) return
         const rawDataUrl = reader.result as string
         void compressDataUrl(rawDataUrl).then((compressed) => {
+          if (pasteGeneration !== pasteGenerationRef.current) return
+          if (pastedSessionId !== useTabStore.getState().activeTabId) return
           setComposerAttachments((prev) => [
             ...prev,
             {

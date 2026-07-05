@@ -34,6 +34,7 @@ const PROXY_ENV_KEYS = [
   'http_proxy',
   'https_proxy',
 ] as const
+const LOOPBACK_NO_PROXY_ENTRIES = ['localhost', '127.0.0.1', '::1'] as const
 
 export function resolveHostTriple(platform = process.platform, arch = process.arch): string {
   if (platform === 'darwin' && arch === 'arm64') return 'aarch64-apple-darwin'
@@ -164,26 +165,45 @@ export function preferredServerPorts(env: NodeJS.ProcessEnv = process.env): numb
 
 export async function waitForServer(host: string, port: number, timeoutMs = 10_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
+  const healthUrl = `http://${host}:${port}/health`
+  let lastError: Error | null = null
+
   while (Date.now() < deadline) {
-    if (await canConnect(host, port)) return
+    try {
+      await assertServerHealth(healthUrl, Math.min(500, Math.max(100, deadline - Date.now())))
+      return
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+    }
     await sleep(150)
   }
-  throw new Error(`desktop server did not start listening on ${host}:${port} within ${Math.round(timeoutMs / 1000)} seconds`)
+
+  const reason = lastError ? `: ${lastError.message}` : ''
+  throw new Error(`desktop server did not report healthy at ${healthUrl} within ${Math.round(timeoutMs / 1000)} seconds${reason}`)
 }
 
-function canConnect(host: string, port: number): Promise<boolean> {
-  return new Promise(resolve => {
-    const socket = net.connect({ host, port, timeout: 200 })
-    socket.once('connect', () => {
-      socket.destroy()
-      resolve(true)
+async function assertServerHealth(healthUrl: string, timeoutMs: number): Promise<void> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(healthUrl, {
+      cache: 'no-store',
+      signal: controller.signal,
     })
-    socket.once('timeout', () => {
-      socket.destroy()
-      resolve(false)
-    })
-    socket.once('error', () => resolve(false))
-  })
+    if (!response.ok) throw new Error(`healthcheck returned ${response.status}`)
+
+    const contentType = response.headers.get('content-type') ?? ''
+    if (!contentType.toLowerCase().includes('application/json')) {
+      throw new Error(`healthcheck returned non-JSON response from ${healthUrl}`)
+    }
+
+    const body = await response.json().catch(() => null)
+    if (!body || typeof body !== 'object' || !('status' in body) || body.status !== 'ok') {
+      throw new Error(`healthcheck returned invalid response from ${healthUrl}`)
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 function sleep(ms: number): Promise<void> {
@@ -229,7 +249,12 @@ export function mergeProxyEnv(
   proxyUrl: string | undefined,
 ): NodeJS.ProcessEnv {
   if (!proxyUrl) return baseEnv
-  if (PROXY_ENV_KEYS.some(key => baseEnv[key])) return baseEnv
+  if (PROXY_ENV_KEYS.some(key => baseEnv[key])) {
+    const noProxy = mergeLoopbackNoProxy(baseEnv.no_proxy || baseEnv.NO_PROXY)
+    return { ...baseEnv, NO_PROXY: noProxy, no_proxy: noProxy }
+  }
+
+  const noProxy = mergeLoopbackNoProxy(baseEnv.no_proxy || baseEnv.NO_PROXY)
 
   return {
     ...baseEnv,
@@ -237,8 +262,23 @@ export function mergeProxyEnv(
     HTTPS_PROXY: proxyUrl,
     http_proxy: proxyUrl,
     https_proxy: proxyUrl,
-    NO_PROXY: baseEnv.NO_PROXY || baseEnv.no_proxy || 'localhost,127.0.0.1,::1',
+    NO_PROXY: noProxy,
+    no_proxy: noProxy,
   }
+}
+
+function mergeLoopbackNoProxy(existing: string | undefined): string {
+  const entries = (existing ?? '')
+    .split(/[,\s]+/)
+    .map(entry => entry.trim())
+    .filter(Boolean)
+  const lowerEntries = new Set(entries.map(entry => entry.toLowerCase()))
+
+  for (const entry of LOOPBACK_NO_PROXY_ENTRIES) {
+    if (!lowerEntries.has(entry.toLowerCase())) entries.push(entry)
+  }
+
+  return entries.join(',')
 }
 
 // The agent's PowerShellTool reads this env var to honor the user's chosen shell
