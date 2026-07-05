@@ -237,7 +237,7 @@ describe('release desktop workflow', () => {
       /missing=\(\)[\s\S]*?# Windows signing is optional:/,
     )?.[0]
     const windowsOptionalBlock = signingJob?.match(
-      /win_missing=\(\)[\s\S]*?fi\n/,
+      /win_missing=\(\)[\s\S]*?(?:\n\s{2}build:|$)/,
     )?.[0]
     expect(macRequiredBlock).not.toContain('exit 1')
     expect(windowsOptionalBlock).toContain('::warning::')
