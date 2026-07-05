@@ -10,6 +10,7 @@ import type { SavedProvider } from '../types/provider'
 import type { ProviderPreset } from '../types/providerPreset'
 import type { AppMode, ChatSendBehavior, ThemeMode, UpdateProxySettings } from '../types/settings'
 import { browserHost } from '../lib/desktopHost/browserHost'
+import { h5AccessApi } from '../api/h5Access'
 
 const MOCK_DELETE_PROVIDER = vi.fn()
 const MOCK_GET_SETTINGS = vi.fn()
@@ -935,8 +936,8 @@ describe('Settings > General tab', () => {
     const section = screen.getByRole('region', { name: 'H5 Access' })
 
     fireEvent.click(within(section).getByLabelText('Enable H5 access'))
-    const dialog = screen.getByRole('dialog', { name: 'Enable LAN H5 access?' })
-    expect(within(dialog).getByText(/desktop H5 app on your LAN address and port/i)).toBeInTheDocument()
+    const dialog = screen.getByRole('dialog', { name: 'Enable H5 access?' })
+    expect(within(dialog).getByText(/desktop H5 app on your configured address/i)).toBeInTheDocument()
 
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Enable H5 access' }))
@@ -966,7 +967,7 @@ describe('Settings > General tab', () => {
     fireEvent.click(within(section).getByLabelText('Enable H5 access'))
 
     await act(async () => {
-      fireEvent.click(within(screen.getByRole('dialog', { name: 'Enable LAN H5 access?' })).getByRole('button', { name: 'Enable H5 access' }))
+      fireEvent.click(within(screen.getByRole('dialog', { name: 'Enable H5 access?' })).getByRole('button', { name: 'Enable H5 access' }))
     })
 
     await within(section).findByAltText('H5 access QR code')
@@ -1036,6 +1037,33 @@ describe('Settings > General tab', () => {
 
     fireEvent.click(within(section).getByRole('button', { name: 'Show token' }))
     expect(within(section).getByText('h5_persisted_token')).toBeInTheDocument()
+  })
+
+  it('keeps a tunnel URL path prefix in the QR launch URL', async () => {
+    useSettingsStore.setState({
+      h5Access: {
+        enabled: true,
+        token: 'h5_tunnel_token',
+        tokenPreview: 'h5_tunn...oken',
+        allowedOrigins: [],
+        publicBaseUrl: 'https://abcd-1234.ngrok-free.app/h5',
+        fixedPort: null,
+        disconnectGraceSeconds: null,
+      },
+    })
+    render(<Settings />)
+
+    fireEvent.click(screen.getByText('H5 Access'))
+    const section = screen.getByRole('region', { name: 'H5 Access' })
+
+    // The /h5 path prefix must survive into both the launch URL path and the
+    // embedded serverUrl query so a scanned QR reconnects through the tunnel.
+    expect(await within(section).findByAltText('H5 access QR code')).toBeInTheDocument()
+    expect(
+      within(section).getByText(
+        'https://abcd-1234.ngrok-free.app/h5?serverUrl=https%3A%2F%2Fabcd-1234.ngrok-free.app%2Fh5&h5Token=h5_tunnel_token',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('saves a fixed port together with the host', async () => {
@@ -1199,7 +1227,7 @@ describe('Settings > General tab', () => {
     fireEvent.click(within(section).getByLabelText('Enable H5 access'))
 
     await act(async () => {
-      fireEvent.click(within(screen.getByRole('dialog', { name: 'Enable LAN H5 access?' })).getByRole('button', { name: 'Enable H5 access' }))
+      fireEvent.click(within(screen.getByRole('dialog', { name: 'Enable H5 access?' })).getByRole('button', { name: 'Enable H5 access' }))
     })
 
     fireEvent.click(within(section).getByRole('button', { name: 'Show token' }))
@@ -1995,5 +2023,44 @@ describe('Settings > About tab', () => {
       mode: 'system',
       url: 'http://127.0.0.1:7890',
     })
+  })
+
+  it('renders the one-click tunnel section with the live URL when a tunnel is running', async () => {
+    vi.spyOn(h5AccessApi, 'tunnelAvailable').mockReturnValue(true)
+    useSettingsStore.setState({
+      h5Access: {
+        enabled: true,
+        token: 'h5_tunnel_token',
+        tokenPreview: 'h5_tunn...oken',
+        allowedOrigins: [],
+        publicBaseUrl: 'https://abcd.trycloudflare.com',
+        fixedPort: null,
+        disconnectGraceSeconds: null,
+      },
+      h5AccessDiagnostics: {
+        storedHostStaleness: 'proxy',
+        storedPublicBaseUrl: null,
+        effectivePublicBaseUrl: 'https://abcd.trycloudflare.com',
+        suggestedHost: null,
+        localInterfaceHosts: [],
+        activePort: 3456,
+        tunnel: {
+          status: 'running',
+          url: 'https://abcd.trycloudflare.com',
+          mode: 'quick',
+          error: null,
+          hasToken: false,
+        },
+      },
+    })
+    render(<Settings />)
+
+    fireEvent.click(screen.getByText('H5 Access'))
+    const section = screen.getByRole('region', { name: 'H5 Access' })
+
+    expect(within(section).getByTestId('h5-access-tunnel')).toBeInTheDocument()
+    // The running tunnel URL is surfaced and the toggle offers to stop it.
+    expect(within(section).getByTestId('h5-access-tunnel-status')).toHaveTextContent('https://abcd.trycloudflare.com')
+    expect(within(section).getByTestId('h5-access-tunnel-toggle')).toHaveTextContent('Stop tunnel')
   })
 })

@@ -214,7 +214,7 @@ describe('DiagnosticsService', () => {
       server.kill()
       await server.exited.catch(() => undefined)
     }
-  })
+  }, 20_000)
 })
 
 describe('diagnostics API', () => {

@@ -9,11 +9,12 @@
 import { H5AccessService, DEFAULT_DISCONNECT_GRACE_MS } from '../services/h5AccessService.js'
 
 let cachedGraceMs = DEFAULT_DISCONNECT_GRACE_MS
+let testOverrideGraceMs: number | null = null
 const h5AccessService = new H5AccessService()
 
 /** Synchronous accessor for the disconnect cleanup grace period, in ms. */
 export function getDisconnectGraceMs(): number {
-  return cachedGraceMs
+  return testOverrideGraceMs ?? cachedGraceMs
 }
 
 /** Reload the cached grace period from managed settings. Best-effort. */
@@ -28,10 +29,11 @@ export async function refreshDisconnectGraceMs(): Promise<number> {
 
 /** Test hook: override the cached value directly. */
 export function __setDisconnectGraceMsForTests(value: number): void {
-  cachedGraceMs = value
+  testOverrideGraceMs = value
 }
 
 /** Test hook: reset to the built-in default. */
 export function __resetDisconnectGraceMsForTests(): void {
+  testOverrideGraceMs = null
   cachedGraceMs = DEFAULT_DISCONNECT_GRACE_MS
 }

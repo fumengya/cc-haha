@@ -60,6 +60,7 @@ import {
 } from '../constants/openaiOfficialProvider'
 import { useUpdateStore } from '../stores/updateStore'
 import { getBaseUrl } from '../api/client'
+import { h5AccessApi } from '../api/h5Access'
 import { formatBytes } from '../lib/formatBytes'
 import { isDesktopRuntime } from '../lib/desktopRuntime'
 import { getDesktopHost } from '../lib/desktopHost'
@@ -3558,6 +3559,8 @@ function H5AccessSettings() {
     disableH5Access,
     regenerateH5AccessToken,
     updateH5AccessSettings,
+    startH5Tunnel,
+    stopH5Tunnel,
   } = useSettingsStore()
   const t = useTranslation()
   const addToast = useUIStore((s) => s.addToast)
@@ -3568,6 +3571,14 @@ function H5AccessSettings() {
   const [h5EnableConfirmOpen, setH5EnableConfirmOpen] = useState(false)
   const [h5QrDataUrl, setH5QrDataUrl] = useState<string | null>(null)
   const [h5ActionRunning, setH5ActionRunning] = useState(false)
+  const [h5TunnelMode, setH5TunnelMode] = useState<'quick' | 'named'>('quick')
+  const [h5TunnelTokenDraft, setH5TunnelTokenDraft] = useState('')
+  const [h5TunnelTokenVisible, setH5TunnelTokenVisible] = useState(false)
+  // One-click tunnelling spawns cloudflared in the desktop main process, so it
+  // is only available inside the Electron shell, not a browser H5 session.
+  const h5TunnelAvailable = h5AccessApi.tunnelAvailable()
+  const h5TunnelState = h5AccessDiagnostics?.tunnel
+  const h5TunnelRunning = h5TunnelState?.status === 'running'
   const h5AccessUrl = h5Access.publicBaseUrl
   // The token is persisted server-side, so the QR code and copy actions stay
   // available across desktop restarts (issue #767).
@@ -3658,6 +3669,29 @@ function H5AccessSettings() {
     addToast({
       type: copied ? 'success' : 'error',
       message: copied ? t('settings.general.h5AccessUrlCopied') : t('common.copyFailed'),
+    })
+  }
+
+  const handleH5TunnelToggle = async () => {
+    await runH5Action(async () => {
+      if (h5TunnelRunning) {
+        await stopH5Tunnel()
+        return
+      }
+      if (h5TunnelMode === 'named') {
+        const token = h5TunnelTokenDraft.trim()
+        if (token) {
+          // Persist the token so the named tunnel survives restarts.
+          await updateH5AccessSettings({ tunnelToken: token, tunnelMode: 'named' })
+        }
+        await startH5Tunnel({
+          mode: 'named',
+          token: token || undefined,
+          namedUrl: h5NextPublicBaseUrl || h5Access.publicBaseUrl || undefined,
+        })
+      } else {
+        await startH5Tunnel({ mode: 'quick' })
+      }
     })
   }
 
@@ -3858,6 +3892,87 @@ function H5AccessSettings() {
                   fixedPort: String(h5Access.fixedPort),
                   activePort: h5ActivePort ?? '',
                 })}
+              </div>
+            )}
+
+            {h5TunnelAvailable && (
+              <div
+                data-testid="h5-access-tunnel"
+                className="mt-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-container-lowest)] px-3 py-3"
+              >
+                <div className="text-sm font-medium text-[var(--color-text-primary)]">
+                  {t('settings.general.h5AccessTunnelTitle')}
+                </div>
+                <p className="mt-1 text-xs leading-5 text-[var(--color-text-tertiary)]">
+                  {t('settings.general.h5AccessTunnelHint')}
+                </p>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <select
+                    aria-label={t('settings.general.h5AccessTunnelMode')}
+                    className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-text-primary)]"
+                    value={h5TunnelMode}
+                    disabled={h5TunnelRunning || h5ActionRunning}
+                    onChange={(event) => setH5TunnelMode(event.target.value === 'named' ? 'named' : 'quick')}
+                  >
+                    <option value="quick">{t('settings.general.h5AccessTunnelModeQuick')}</option>
+                    <option value="named">{t('settings.general.h5AccessTunnelModeNamed')}</option>
+                  </select>
+                  <Button
+                    size="sm"
+                    variant={h5TunnelRunning ? 'secondary' : 'primary'}
+                    loading={h5ActionRunning}
+                    onClick={() => void handleH5TunnelToggle()}
+                    data-testid="h5-access-tunnel-toggle"
+                  >
+                    {h5TunnelRunning
+                      ? t('settings.general.h5AccessTunnelStop')
+                      : t('settings.general.h5AccessTunnelStart')}
+                  </Button>
+                </div>
+
+                {h5TunnelMode === 'named' && !h5TunnelRunning && (
+                  <div className="mt-3">
+                    <Input
+                      id="h5-access-tunnel-token"
+                      label={t('settings.general.h5AccessTunnelToken')}
+                      type={h5TunnelTokenVisible ? 'text' : 'password'}
+                      value={h5TunnelTokenDraft}
+                      placeholder={h5TunnelState?.hasToken
+                        ? t('settings.general.h5AccessTunnelTokenStored')
+                        : t('settings.general.h5AccessTunnelTokenPlaceholder')}
+                      onChange={(event) => setH5TunnelTokenDraft(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="mt-1 text-xs text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"
+                      onClick={() => setH5TunnelTokenVisible((v) => !v)}
+                    >
+                      {h5TunnelTokenVisible
+                        ? t('settings.general.h5AccessHideToken')
+                        : t('settings.general.h5AccessShowToken')}
+                    </button>
+                  </div>
+                )}
+
+                {h5TunnelState && h5TunnelState.status !== 'idle' && (
+                  <div
+                    data-testid="h5-access-tunnel-status"
+                    className="mt-3 text-xs leading-5 text-[var(--color-text-secondary)]"
+                  >
+                    {h5TunnelState.status === 'starting' && t('settings.general.h5AccessTunnelStarting')}
+                    {h5TunnelState.status === 'running' && h5TunnelState.url && (
+                      <span className="break-all">
+                        {t('settings.general.h5AccessTunnelRunning')} {h5TunnelState.url}
+                      </span>
+                    )}
+                    {h5TunnelState.status === 'error' && (
+                      <span className="text-[var(--color-error)]">
+                        {h5TunnelState.error ?? t('settings.general.h5AccessTunnelError')}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

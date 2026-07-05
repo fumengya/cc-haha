@@ -539,6 +539,45 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
     setPendingDeleteSessionId(id)
   }, [])
 
+  const handleCopySessionPath = useCallback(async (sessionId: string) => {
+    setContextMenu(null)
+    const session = sessions.find((s) => s.id === sessionId)
+    if (!session?.filePath) {
+      addToast({ type: 'error', message: t('sidebar.copySessionPathUnavailable') })
+      return
+    }
+    try {
+      await desktopHost.clipboard.writeText(session.filePath)
+      addToast({ type: 'success', message: t('sidebar.copySessionPathSuccess') })
+    } catch {
+      addToast({ type: 'error', message: t('common.copyFailed') })
+    }
+  }, [addToast, sessions, t])
+
+  const handleRevealSession = useCallback(async (sessionId: string) => {
+    setContextMenu(null)
+    const session = sessions.find((s) => s.id === sessionId)
+    if (!session?.filePath) {
+      addToast({ type: 'error', message: t('sidebar.copySessionPathUnavailable') })
+      return
+    }
+    const reveal = desktopHost.shell.showItemInFolder
+    if (!reveal) {
+      addToast({ type: 'error', message: t('sidebar.revealSessionUnsupported') })
+      return
+    }
+    try {
+      await reveal(session.filePath)
+    } catch (error) {
+      addToast({
+        type: 'error',
+        message: t('sidebar.revealSessionFailure', {
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      })
+    }
+  }, [addToast, sessions, t])
+
   const handleExportSession = useCallback(async (sessionId: string) => {
     setContextMenu(null)
     const session = sessions.find((s) => s.id === sessionId)
@@ -1331,6 +1370,20 @@ export function Sidebar({ isMobile = false, onRequestClose }: SidebarProps) {
           >
             {t('sidebar.exportSession')}
           </button>
+          <button
+            onClick={() => handleCopySessionPath(contextMenu.id)}
+            className="w-full px-3 py-1.5 text-left text-xs text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+          >
+            {t('sidebar.copySessionPath')}
+          </button>
+          {desktopHost.shell.showItemInFolder && (
+            <button
+              onClick={() => handleRevealSession(contextMenu.id)}
+              className="w-full px-3 py-1.5 text-left text-xs text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+            >
+              {t('sidebar.revealSession')}
+            </button>
+          )}
         </div>
       )}
 

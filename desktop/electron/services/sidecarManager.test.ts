@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import net from 'node:net'
 import path from 'node:path'
+import { EventEmitter } from 'node:events'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import {
   buildSidecarEnv,
   createAdapterPlan,
   createServerPlan,
+  createTunnelPlan,
   httpToWebSocketUrl,
   killSidecar,
   mergeProxyEnv,
@@ -18,8 +20,10 @@ import {
   readLastServerPort,
   reserveLocalPort,
   reserveServerPort,
+  resolveCloudflaredPath,
   resolveHostTriple,
   spawnSidecar,
+  waitForTunnelUrl,
   windowsPowerShellOverride,
   writeLastServerPort,
   type SidecarChild,
@@ -67,7 +71,7 @@ describe('Electron sidecar manager', () => {
       env: {},
     })
 
-    expect(plan.command).toContain('/Applications/App.app/Contents/Resources/app.asar.unpacked/src-tauri/binaries/claude-sidecar-')
+    expect(plan.command).toContain(path.join('/Applications/App.app/Contents/Resources/app.asar.unpacked', 'src-tauri', 'binaries', 'claude-sidecar-'))
     expect(plan.args).toContain('/Applications/App.app/Contents/Resources/app.asar')
     expect(plan.env.CLAUDE_H5_DIST_DIR).toBe('/Applications/App.app/Contents/Resources/app.asar.unpacked/dist')
   })
@@ -262,5 +266,98 @@ describe('Electron sidecar manager', () => {
 
     // Invalid entries are skipped without throwing.
     await expect(reserveServerPort('127.0.0.1', [0, -1, 1.5, 70000])).resolves.toBeGreaterThan(0)
+  })
+
+  it('builds a quick tunnel plan pointing at the local server port', () => {
+    const plan = createTunnelPlan({
+      cloudflaredPath: '/usr/local/bin/cloudflared',
+      port: 28670,
+      mode: 'quick',
+      env: {},
+    })
+    expect(plan.command).toBe('/usr/local/bin/cloudflared')
+    expect(plan.args).toEqual([
+      'tunnel',
+      '--no-autoupdate',
+      '--url',
+      'http://127.0.0.1:28670',
+    ])
+  })
+
+  it('builds a named tunnel plan using the Cloudflare token', () => {
+    const plan = createTunnelPlan({
+      cloudflaredPath: 'cloudflared.exe',
+      port: 28670,
+      mode: 'named',
+      token: 'cf-token-123',
+      env: {},
+    })
+    expect(plan.args).toEqual([
+      'tunnel',
+      '--no-autoupdate',
+      'run',
+      '--token',
+      'cf-token-123',
+    ])
+  })
+
+  it('rejects a named tunnel plan without a token', () => {
+    expect(() => createTunnelPlan({
+      cloudflaredPath: 'cloudflared',
+      port: 28670,
+      mode: 'named',
+      env: {},
+    })).toThrow(/token is required/i)
+  })
+
+  it('resolves an explicit cloudflared override only when it exists', () => {
+    expect(resolveCloudflaredPath({ CLOUDFLARED_PATH: '/opt/cf' }, {
+      existsSyncFn: ((p: string) => p === '/opt/cf') as typeof import('node:fs').existsSync,
+      platform: 'linux',
+    })).toBe('/opt/cf')
+
+    expect(resolveCloudflaredPath({ CLOUDFLARED_PATH: '/missing' }, {
+      existsSyncFn: (() => false) as typeof import('node:fs').existsSync,
+      platform: 'linux',
+    })).toBeNull()
+  })
+
+  it('falls back to a bare cloudflared command name when no install path matches', () => {
+    expect(resolveCloudflaredPath({}, {
+      existsSyncFn: (() => false) as typeof import('node:fs').existsSync,
+      platform: 'win32',
+    })).toBe('cloudflared.exe')
+    expect(resolveCloudflaredPath({}, {
+      existsSyncFn: (() => false) as typeof import('node:fs').existsSync,
+      platform: 'linux',
+    })).toBe('cloudflared')
+  })
+
+  it('waitForTunnelUrl resolves with the trycloudflare URL from stderr', async () => {
+    const child = Object.assign(new EventEmitter(), {
+      stdout: new EventEmitter(),
+      stderr: new EventEmitter(),
+    }) as unknown as SidecarChild
+    const promise = waitForTunnelUrl(child, { timeoutMs: 1000 })
+    child.stderr.emit('data', 'INF |  https://random-words-42.trycloudflare.com  |\n')
+    await expect(promise).resolves.toBe('https://random-words-42.trycloudflare.com')
+  })
+
+  it('waitForTunnelUrl rejects when cloudflared exits before printing a URL', async () => {
+    const child = Object.assign(new EventEmitter(), {
+      stdout: new EventEmitter(),
+      stderr: new EventEmitter(),
+    }) as unknown as SidecarChild
+    const promise = waitForTunnelUrl(child, { timeoutMs: 1000 })
+    child.emit('exit', 1)
+    await expect(promise).rejects.toThrow(/exited before printing/i)
+  })
+
+  it('waitForTunnelUrl rejects on timeout', async () => {
+    const child = Object.assign(new EventEmitter(), {
+      stdout: new EventEmitter(),
+      stderr: new EventEmitter(),
+    }) as unknown as SidecarChild
+    await expect(waitForTunnelUrl(child, { timeoutMs: 20 })).rejects.toThrow(/Timed out/i)
   })
 })

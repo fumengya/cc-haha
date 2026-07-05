@@ -14,6 +14,12 @@ export default defineConfig({
     globals: true,
     css: true,
     setupFiles: ['src/test-setup.ts'],
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      'build-artifacts/**',
+      'plugin-seed/**',
+    ],
     coverage: {
       include: ['src/**/*.{ts,tsx}'],
       exclude: [

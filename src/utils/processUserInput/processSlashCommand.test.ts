@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test'
-import agentCommand from '../../commands/agent.js'
 import type { ToolUseContext } from '../../Tool.js'
 import type { AgentDefinition } from '../../tools/AgentTool/loadAgentsDir.js'
 import { createAssistantMessage } from '../messages.js'
 
-process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? 'test-key'
+process.env.ANTHROPIC_API_KEY = 'test-key'
+
+const { default: agentCommand } = await import('../../commands/agent.js')
 
 const runAgentMock = mock(() =>
   (async function* () {

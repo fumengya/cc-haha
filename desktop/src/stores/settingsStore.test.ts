@@ -1424,4 +1424,108 @@ describe('settingsStore H5 access behavior', () => {
     expect(useSettingsStore.getState().h5AccessError).toBeNull()
     expect('h5AccessGeneratedToken' in useSettingsStore.getState()).toBe(false)
   })
+
+  it('starts and stops the H5 tunnel and mirrors diagnostics state', async () => {
+    vi.doMock('../api/settings', () => ({
+      settingsApi: {
+        getUser: vi.fn(),
+        updateUser: vi.fn(),
+        getPermissionMode: vi.fn(),
+        setPermissionMode: vi.fn(),
+        getCliLauncherStatus: vi.fn(),
+      },
+    }))
+    vi.doMock('../api/models', () => ({
+      modelsApi: {
+        list: vi.fn(),
+        getCurrent: vi.fn(),
+        setCurrent: vi.fn(),
+        getEffort: vi.fn(),
+        setEffort: vi.fn(),
+      },
+    }))
+    const startTunnel = vi.fn().mockResolvedValue({
+      status: 'running',
+      url: 'https://abcd.trycloudflare.com',
+      mode: 'quick',
+      error: null,
+    })
+    const stopTunnel = vi.fn().mockResolvedValue({ status: 'idle', url: null, mode: null, error: null })
+    // get() drives refreshH5DiagnosticsSilent: first call (after start) shows the
+    // running tunnel, second call (after stop) shows it cleared.
+    const get = vi.fn()
+      .mockResolvedValueOnce({
+        settings: {
+          enabled: true, token: 't', tokenPreview: 't', allowedOrigins: [],
+          publicBaseUrl: 'https://abcd.trycloudflare.com', fixedPort: null, disconnectGraceSeconds: null,
+        },
+        diagnostics: {
+          storedHostStaleness: 'unset', storedPublicBaseUrl: null,
+          effectivePublicBaseUrl: 'https://abcd.trycloudflare.com', suggestedHost: null,
+          localInterfaceHosts: [], activePort: 3456,
+          tunnel: { status: 'running', url: 'https://abcd.trycloudflare.com', mode: 'quick', error: null, hasToken: false },
+        },
+      })
+      .mockResolvedValueOnce({
+        settings: {
+          enabled: true, token: 't', tokenPreview: 't', allowedOrigins: [],
+          publicBaseUrl: null, fixedPort: null, disconnectGraceSeconds: null,
+        },
+        diagnostics: {
+          storedHostStaleness: 'unset', storedPublicBaseUrl: null,
+          effectivePublicBaseUrl: null, suggestedHost: null,
+          localInterfaceHosts: [], activePort: 3456,
+          tunnel: { status: 'idle', url: null, mode: null, error: null, hasToken: false },
+        },
+      })
+    vi.doMock('../api/h5Access', () => ({
+      h5AccessApi: { get, enable: vi.fn(), disable: vi.fn(), regenerate: vi.fn(), update: vi.fn(), startTunnel, stopTunnel },
+    }))
+
+    const { useSettingsStore } = await import('./settingsStore')
+
+    await useSettingsStore.getState().startH5Tunnel({ mode: 'quick' })
+    expect(startTunnel).toHaveBeenCalledWith({ mode: 'quick' })
+    expect(useSettingsStore.getState().h5AccessDiagnostics?.tunnel).toMatchObject({
+      status: 'running',
+      url: 'https://abcd.trycloudflare.com',
+    })
+    expect(useSettingsStore.getState().h5AccessError).toBeNull()
+
+    await useSettingsStore.getState().stopH5Tunnel()
+    expect(stopTunnel).toHaveBeenCalledTimes(1)
+    expect(useSettingsStore.getState().h5AccessDiagnostics?.tunnel?.status).toBe('idle')
+  })
+
+  it('surfaces a tunnel error from diagnostics as h5AccessError', async () => {
+    vi.doMock('../api/settings', () => ({
+      settingsApi: {
+        getUser: vi.fn(), updateUser: vi.fn(), getPermissionMode: vi.fn(),
+        setPermissionMode: vi.fn(), getCliLauncherStatus: vi.fn(),
+      },
+    }))
+    vi.doMock('../api/models', () => ({
+      modelsApi: { list: vi.fn(), getCurrent: vi.fn(), setCurrent: vi.fn(), getEffort: vi.fn(), setEffort: vi.fn() },
+    }))
+    const startTunnel = vi.fn().mockResolvedValue({ status: 'error', url: null, mode: 'quick', error: 'cloudflared not found' })
+    const get = vi.fn().mockResolvedValue({
+      settings: {
+        enabled: true, token: 't', tokenPreview: 't', allowedOrigins: [],
+        publicBaseUrl: null, fixedPort: null, disconnectGraceSeconds: null,
+      },
+      diagnostics: {
+        storedHostStaleness: 'unset', storedPublicBaseUrl: null, effectivePublicBaseUrl: null,
+        suggestedHost: null, localInterfaceHosts: [], activePort: 3456,
+        tunnel: { status: 'error', url: null, mode: 'quick', error: 'cloudflared not found', hasToken: false },
+      },
+    })
+    vi.doMock('../api/h5Access', () => ({
+      h5AccessApi: { get, enable: vi.fn(), disable: vi.fn(), regenerate: vi.fn(), update: vi.fn(), startTunnel, stopTunnel: vi.fn() },
+    }))
+
+    const { useSettingsStore } = await import('./settingsStore')
+
+    await expect(useSettingsStore.getState().startH5Tunnel({ mode: 'quick' })).rejects.toThrow(/cloudflared not found/)
+    expect(useSettingsStore.getState().h5AccessError).toBe('cloudflared not found')
+  })
 })

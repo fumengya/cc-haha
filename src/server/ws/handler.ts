@@ -63,6 +63,7 @@ const sessionSlashCommands = new Map<string, SessionSlashCommand[]>()
  * If a client reconnects before the timer fires, the timer is cancelled.
  */
 const PENDING_PERMISSION_DISCONNECT_CLEANUP_MS = 30 * 60_000
+let disableDisconnectCleanupForTests = false
 const sessionCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>()
 /**
  * Per-session removers for the turn-completion watcher (issue #764). When the
@@ -140,6 +141,7 @@ const soloPipelineModeSessions = new Set<string>()
 const handoffSummarySessions = new Map<string, string>()
 
 const runtimeTransitionPromises = new Map<string, Promise<void>>()
+const runtimeConfigHandlerPromises = new Map<string, Promise<void>>()
 const sessionStartupPromises = new Map<string, Promise<void>>()
 const runtimeOverrideVersions = new Map<string, number>()
 const sessionStartupRuntimeVersions = new Map<string, number>()
@@ -281,7 +283,7 @@ export const handleWebSocket = {
           break
 
         case 'set_runtime_config':
-          void handleSetRuntimeConfig(ws, message)
+          trackRuntimeConfigHandler(ws.data.sessionId, () => handleSetRuntimeConfig(ws, message))
           break
 
         case 'prewarm_session':
@@ -346,6 +348,38 @@ export const handleWebSocket = {
 // Message handlers
 // ============================================================================
 
+function trackRuntimeConfigHandler(sessionId: string, handler: () => Promise<void>): void {
+  const previous = runtimeConfigHandlerPromises.get(sessionId) ?? Promise.resolve()
+  const next = previous
+    .catch(() => {})
+    .then(handler)
+    .catch((err) => {
+      void diagnosticsService.recordEvent({
+        type: 'ws_runtime_config_failed',
+        severity: 'error',
+        sessionId,
+        summary: err instanceof Error ? err.message : String(err),
+        details: err,
+      })
+      console.error(`[WS] Unhandled error in runtime config handler:`, err)
+    })
+    .finally(() => {
+      if (runtimeConfigHandlerPromises.get(sessionId) === next) {
+        runtimeConfigHandlerPromises.delete(sessionId)
+      }
+    })
+  runtimeConfigHandlerPromises.set(sessionId, next)
+}
+
+async function waitForRuntimeConfigHandlers(sessionId: string): Promise<void> {
+  let pendingHandler = runtimeConfigHandlerPromises.get(sessionId)
+  while (pendingHandler) {
+    await pendingHandler.catch(() => {})
+    const nextHandler = runtimeConfigHandlerPromises.get(sessionId)
+    pendingHandler = nextHandler && nextHandler !== pendingHandler ? nextHandler : undefined
+  }
+}
+
 async function handleUserMessage(
   ws: ServerWebSocket<WebSocketData>,
   message: Extract<ClientMessage, { type: 'user_message' }>
@@ -371,6 +405,8 @@ async function handleUserMessage(
     await handleDesktopClearCommand(ws)
     return
   }
+
+  await waitForRuntimeConfigHandlers(sessionId)
 
   // Send thinking status
   sendMessage(ws, { type: 'status', state: 'thinking', verb: 'Thinking' })
@@ -1418,6 +1454,7 @@ function cleanupSessionRuntimeState(sessionId: string) {
   deferredRuntimeRestarts.delete(sessionId)
   deferredPermissionModes.delete(sessionId)
   runtimeTransitionPromises.delete(sessionId)
+  runtimeConfigHandlerPromises.delete(sessionId)
   sessionStartupPromises.delete(sessionId)
   lastResolvedStartupWorkDirs.delete(sessionId)
   clearPrewarmState(sessionId)
@@ -2323,6 +2360,8 @@ function isSessionTurnActive(sessionId: string): boolean {
 function scheduleDisconnectCleanup(sessionId: string): void {
   computerUseApprovalService.cancelSession(sessionId)
 
+  if (disableDisconnectCleanupForTests) return
+
   const existing = sessionCleanupTimers.get(sessionId)
   if (existing) clearTimeout(existing)
 
@@ -3193,14 +3232,52 @@ export function getActiveSessionIds(): string[] {
   return Array.from(activeSessions.keys())
 }
 
-export function __resetWebSocketHandlerStateForTests(): void {
+export function __clearWebSocketDisconnectTimersForTests(): void {
   for (const timer of sessionCleanupTimers.values()) clearTimeout(timer)
-  for (const timer of prewarmIdleTimers.values()) clearTimeout(timer)
   for (const remove of sessionDisconnectWatchers.values()) remove()
-  activeSessions.clear()
-  clientOutputCallbacks.clear()
   sessionCleanupTimers.clear()
   sessionDisconnectWatchers.clear()
+}
+
+export function __setDisconnectCleanupDisabledForTests(disabled: boolean): void {
+  disableDisconnectCleanupForTests = disabled
+}
+
+export function __runFailingRuntimeConfigHandlerForTests(sessionId: string): void {
+  trackRuntimeConfigHandler(sessionId, async () => {
+    throw new Error('test runtime config failure')
+  })
+}
+
+export async function __drainWebSocketRuntimeTransitionsForTests(): Promise<void> {
+  while (runtimeConfigHandlerPromises.size > 0 || runtimeTransitionPromises.size > 0) {
+    const pendingHandlers = Array.from(runtimeConfigHandlerPromises.values())
+    const pendingTransitions = Array.from(runtimeTransitionPromises.values())
+    await Promise.allSettled([...pendingHandlers, ...pendingTransitions])
+  }
+}
+
+export function __cleanupWebSocketRuntimeStateForTests(): void {
+  const sessionIds = new Set<string>([
+    ...activeSessions.keys(),
+    ...sessionCleanupTimers.keys(),
+    ...sessionDisconnectWatchers.keys(),
+    ...activeUserTurns.keys(),
+    ...deferredRuntimeRestarts.keys(),
+    ...deferredPermissionModes.keys(),
+    ...runtimeTransitionPromises.keys(),
+  ])
+  for (const sessionId of sessionIds) {
+    cleanupSessionRuntimeState(sessionId)
+  }
+}
+
+export function __resetWebSocketHandlerStateForTests(): void {
+  disableDisconnectCleanupForTests = false
+  __cleanupWebSocketRuntimeStateForTests()
+  for (const timer of prewarmIdleTimers.values()) clearTimeout(timer)
+  activeSessions.clear()
+  clientOutputCallbacks.clear()
   prewarmPendingSessions.clear()
   prewarmedSessions.clear()
   prewarmIdleTimers.clear()
