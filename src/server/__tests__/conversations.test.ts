@@ -5,7 +5,7 @@
  * WebSocket 集成测试验证消息从客户端经过服务端到达 CLI 的完整流转。
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'bun:test'
+import { afterEach, describe, it, expect, beforeAll, afterAll } from 'bun:test'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import * as os from 'os'
@@ -16,6 +16,8 @@ import { getSoloPipelineSystemPrompt } from '../../coordinator/soloPipelinePromp
 import { ORCHESTRATION_PROMPT_MARKER, ORCHESTRATION_SYSTEM_PROMPT, ORCHESTRATION_PROPAGATE_RULES_MARKER } from '../orchestrationPrompt.js'
 import { SessionService, sessionService } from '../services/sessionService.js'
 import { ProviderService } from '../services/providerService.js'
+import { diagnosticsService } from '../services/diagnosticsService.js'
+import { __cleanupWebSocketRuntimeStateForTests, __drainWebSocketRuntimeTransitionsForTests, __resetWebSocketHandlerStateForTests, __runFailingRuntimeConfigHandlerForTests, __setDisconnectCleanupDisabledForTests } from '../ws/handler.js'
 
 async function rmWithRetry(targetPath: string): Promise<void> {
   const attempts = process.platform === 'win32' ? 5 : 1
@@ -665,10 +667,12 @@ describe('ConversationService', () => {
   it('should reconstruct Sonnet 4.6 transcript usage before CLI config is initialized', async () => {
     const previousConfigDir = process.env.CLAUDE_CONFIG_DIR
     const previousNodeEnv = process.env.NODE_ENV
+    const previousDisable1mContext = process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT
     const tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-transcript-sonnet-'))
     const workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-workdir-sonnet-'))
     process.env.CLAUDE_CONFIG_DIR = tmpConfigDir
     process.env.NODE_ENV = 'development'
+    process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT = '1'
 
     try {
       const svc = new SessionService()
@@ -712,6 +716,11 @@ describe('ConversationService', () => {
         delete process.env.NODE_ENV
       } else {
         process.env.NODE_ENV = previousNodeEnv
+      }
+      if (previousDisable1mContext === undefined) {
+        delete process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT
+      } else {
+        process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT = previousDisable1mContext
       }
       await fs.rm(tmpConfigDir, { recursive: true, force: true })
       await fs.rm(workDir, { recursive: true, force: true })
@@ -895,11 +904,13 @@ describe('ConversationService', () => {
     const previousConfigDir = process.env.CLAUDE_CONFIG_DIR
     const previousNodeEnv = process.env.NODE_ENV
     const previousUseBedrock = process.env.CLAUDE_CODE_USE_BEDROCK
+    const previousDisable1mContext = process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT
     const tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-transcript-media-'))
     const workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-workdir-media-'))
     process.env.CLAUDE_CONFIG_DIR = tmpConfigDir
     process.env.NODE_ENV = 'development'
     process.env.CLAUDE_CODE_USE_BEDROCK = '1'
+    process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT = '1'
 
     try {
       const svc = new SessionService()
@@ -963,6 +974,11 @@ describe('ConversationService', () => {
       } else {
         process.env.CLAUDE_CODE_USE_BEDROCK = previousUseBedrock
       }
+      if (previousDisable1mContext === undefined) {
+        delete process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT
+      } else {
+        process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT = previousDisable1mContext
+      }
       await fs.rm(tmpConfigDir, { recursive: true, force: true })
       await fs.rm(workDir, { recursive: true, force: true })
     }
@@ -972,11 +988,13 @@ describe('ConversationService', () => {
     const previousConfigDir = process.env.CLAUDE_CONFIG_DIR
     const previousNodeEnv = process.env.NODE_ENV
     const previousUseBedrock = process.env.CLAUDE_CODE_USE_BEDROCK
+    const previousDisable1mContext = process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT
     const tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-transcript-compact-'))
     const workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-workdir-compact-'))
     process.env.CLAUDE_CONFIG_DIR = tmpConfigDir
     process.env.NODE_ENV = 'development'
     process.env.CLAUDE_CODE_USE_BEDROCK = '1'
+    process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT = '1'
 
     try {
       const svc = new SessionService()
@@ -1042,6 +1060,11 @@ describe('ConversationService', () => {
         delete process.env.CLAUDE_CODE_USE_BEDROCK
       } else {
         process.env.CLAUDE_CODE_USE_BEDROCK = previousUseBedrock
+      }
+      if (previousDisable1mContext === undefined) {
+        delete process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT
+      } else {
+        process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT = previousDisable1mContext
       }
       await fs.rm(tmpConfigDir, { recursive: true, force: true })
       await fs.rm(workDir, { recursive: true, force: true })
@@ -1327,11 +1350,21 @@ describe('WebSocket Chat Integration', () => {
 
     const { startServer } = await import('../index.js')
     server = startServer(0, '127.0.0.1')
+    __setDisconnectCleanupDisabledForTests(true)
     baseUrl = `http://127.0.0.1:${server.port}`
     wsUrl = `ws://127.0.0.1:${server.port}`
   })
 
+  afterEach(async () => {
+    await conversationService.stopAllSessionsAndWait()
+    await __drainWebSocketRuntimeTransitionsForTests()
+    __cleanupWebSocketRuntimeStateForTests()
+  })
+
   afterAll(async () => {
+    const { stopServerRuntimeForShutdown } = await import('../index.js')
+    await stopServerRuntimeForShutdown({ waitForCli: true })
+    __resetWebSocketHandlerStateForTests()
     server?.stop(true)
     if (tmpDir) {
       await rmWithRetry(tmpDir)
@@ -1368,6 +1401,38 @@ describe('WebSocket Chat Integration', () => {
 
     expect(messages[0].type).toBe('connected')
     expect(messages[0].sessionId).toBe('chat-test-1')
+  })
+
+  it('should skip disconnect cleanup timers when disabled for tests', async () => {
+    const ws = new WebSocket(`${wsUrl}/ws/chat-test-disconnect-disabled`)
+
+    await new Promise<void>((resolve) => {
+      ws.onmessage = () => {
+        ws.close()
+        resolve()
+      }
+      ws.onerror = () => {
+        ws.close()
+        resolve()
+      }
+      setTimeout(() => {
+        ws.close()
+        resolve()
+      }, 3000)
+    })
+
+    expect(conversationService.hasSession('chat-test-disconnect-disabled')).toBe(false)
+  })
+
+  it('records runtime config handler failures without leaking the pending handler', async () => {
+    __runFailingRuntimeConfigHandlerForTests('chat-test-runtime-config-failure')
+
+    await __drainWebSocketRuntimeTransitionsForTests()
+
+    await waitUntil(async () => {
+      const events = await diagnosticsService.readRecentEvents(5)
+      return events.some((event) => event.type === 'ws_runtime_config_failed')
+    }, 'runtime config failure diagnostic event')
   })
 
   it('should handle stop_generation and return idle status', async () => {

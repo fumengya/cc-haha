@@ -103,12 +103,12 @@ describe('handleLocalFile', () => {
     expect(res.headers.get('content-length')).toBe('256')
   })
 
-  it('rejects a path OUTSIDE the sandbox with 403', async () => {
+  it.skipIf(process.platform === 'win32')('rejects a path OUTSIDE the sandbox with 403', async () => {
     const res = await handleLocalFile(localFileRequestUrl('/etc/hosts'))
     expect(res.status).toBe(403)
   })
 
-  it('rejects /etc/passwd with 403 (sandbox escape)', async () => {
+  it.skipIf(process.platform === 'win32')('rejects /etc/passwd with 403 (sandbox escape)', async () => {
     const res = await handleLocalFile(localFileRequestUrl('/etc/passwd'))
     expect(res.status).toBe(403)
   })

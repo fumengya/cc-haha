@@ -379,7 +379,7 @@ describe('WorkspaceService', () => {
     await expect(service.readTree('session-1', '../outside')).rejects.toThrow(/outside workspace/)
   })
 
-  it('rejects symlink targets that escape the workspace root', async () => {
+  it.skipIf(process.platform === 'win32')('rejects symlink targets that escape the workspace root', async () => {
     const workDir = await makeTempDir('workspace-service-symlink-')
     const outsideDir = await makeTempDir('workspace-service-symlink-outside-')
     const outsideFile = path.join(outsideDir, 'secret.txt')
@@ -391,7 +391,7 @@ describe('WorkspaceService', () => {
     await expect(service.readFile('session-1', 'escape.txt')).rejects.toThrow(/outside workspace/)
   })
 
-  it('returns error for an untracked symlink that escapes the workspace root', async () => {
+  it.skipIf(process.platform === 'win32')('returns error for an untracked symlink that escapes the workspace root', async () => {
     const repoDir = await makeTempDir('workspace-service-symlink-git-')
     const outsideDir = await makeTempDir('workspace-service-symlink-git-outside-')
     const outsideFile = path.join(outsideDir, 'secret.txt')

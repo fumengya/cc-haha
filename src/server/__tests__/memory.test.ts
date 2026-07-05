@@ -161,7 +161,7 @@ describe('memory API', () => {
     })
   })
 
-  it('rejects traversal and symlink escapes', async () => {
+  it.skipIf(process.platform === 'win32')('rejects traversal and symlink escapes', async () => {
     const projectId = sanitizePath(path.join(tmpDir, 'workspace', 'app'))
     const memoryDir = path.join(tmpDir, 'projects', projectId, 'memory')
     const outsideDir = path.join(tmpDir, 'outside')

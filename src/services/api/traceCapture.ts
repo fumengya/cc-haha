@@ -519,7 +519,6 @@ export async function captureResponseTraceSnapshot(
       interrupted = true
       void reader.cancel().catch(() => {})
       graceTimer = setTimeout(() => resolve('forced'), options?.abortGraceMs ?? TRACE_ABORT_CAPTURE_GRACE_MS)
-      graceTimer.unref?.()
     }
     if (signal.aborted) onAbort()
     else signal.addEventListener('abort', onAbort, { once: true })

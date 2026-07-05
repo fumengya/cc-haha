@@ -327,6 +327,7 @@ export function buildProviderManagedEnv(
     ...(Object.keys(modelContextWindows).length > 0 && {
       [MODEL_CONTEXT_WINDOWS_ENV_KEY]: JSON.stringify(modelContextWindows),
     }),
+    ...(!needsProxy && { ENABLE_TOOL_SEARCH: String(provider.toolSearchEnabled ?? true) }),
     // Sticky compatibility flag: when cc-haha previously observed this
     // provider rejecting Anthropic's `thinking` field with a 4xx (e.g.
     // Bedrock proxies returning "additionalModelRequestFields not

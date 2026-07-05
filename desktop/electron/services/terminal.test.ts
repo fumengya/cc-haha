@@ -74,8 +74,8 @@ describe('Electron terminal service', () => {
   it('uses the portable terminal config path before app userData', () => {
     const app = { getPath: vi.fn(() => '/app/user-data') }
 
-    expect(terminalConfigPath(app, { CLAUDE_CONFIG_DIR: '/portable' })).toBe('/portable/terminal-config.json')
-    expect(terminalConfigPath(app, {})).toBe('/app/user-data/terminal-config.json')
+    expect(terminalConfigPath(app, { CLAUDE_CONFIG_DIR: '/portable' })).toBe(path.normalize('/portable/terminal-config.json'))
+    expect(terminalConfigPath(app, {})).toBe(path.normalize('/app/user-data/terminal-config.json'))
   })
 
   it('persists the legacy bash path config and validates saved paths', () => {
@@ -151,8 +151,10 @@ describe('Electron terminal service', () => {
 
     expect(prepareNodePtyRuntime(source, cache)).toBe(cache)
     expect(fs.existsSync(path.join(cache, 'index.js'))).toBe(true)
-    expect(fs.statSync(cache).mode & 0o077).toBe(0)
-    expect(fs.statSync(path.join(cache, 'prebuilds', 'darwin-arm64', 'spawn-helper')).mode & 0o777).toBe(0o500)
+    if (process.platform !== 'win32') {
+      expect(fs.statSync(cache).mode & 0o077).toBe(0)
+      expect(fs.statSync(path.join(cache, 'prebuilds', 'darwin-arm64', 'spawn-helper')).mode & 0o777).toBe(0o500)
+    }
     expect(fs.existsSync(path.join(cache, '.cc-haha-node-pty-manifest.json'))).toBe(true)
   })
 
