@@ -212,7 +212,7 @@ export function isTraceCaptureEnabled(): boolean {
 }
 
 export function getTraceStorageDir(): string {
-  return join(getClaudeConfigHomeDir(), 'cc-haha', 'traces')
+  return join(process.env.CLAUDE_CONFIG_DIR ?? getClaudeConfigHomeDir(), 'cc-haha', 'traces')
 }
 
 export function readTraceCaptureSettingsSync(): TraceCaptureSettings {
