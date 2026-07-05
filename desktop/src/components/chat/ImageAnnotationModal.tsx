@@ -21,6 +21,13 @@ type Props = {
 
 const STROKE_COLOR = '#ff4d4f'
 const TEXT_SIZE = 28
+const TEXT_HIT_PADDING = 10
+
+type TextDrag = {
+  index: number
+  offsetX: number
+  offsetY: number
+}
 
 async function imageSourceToDataUrl(src: string): Promise<string> {
   if (src.startsWith('data:')) return src
@@ -52,6 +59,11 @@ function drawArrow(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: nu
   ctx.stroke()
 }
 
+function setAnnotationTextStyle(ctx: CanvasRenderingContext2D) {
+  ctx.font = `700 ${TEXT_SIZE}px sans-serif`
+  ctx.textBaseline = 'alphabetic'
+}
+
 function drawAnnotation(ctx: CanvasRenderingContext2D, annotation: Annotation) {
   ctx.save()
   ctx.strokeStyle = STROKE_COLOR
@@ -59,7 +71,7 @@ function drawAnnotation(ctx: CanvasRenderingContext2D, annotation: Annotation) {
   ctx.lineWidth = 4
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
-  ctx.font = `700 ${TEXT_SIZE}px sans-serif`
+  setAnnotationTextStyle(ctx)
 
   if (annotation.tool === 'rect') {
     ctx.strokeRect(annotation.x, annotation.y, annotation.width, annotation.height)
@@ -83,6 +95,7 @@ export function ImageAnnotationModal({ open, image, onClose, onSave }: Props) {
   const [annotations, setAnnotations] = useState<Annotation[]>([])
   const [draft, setDraft] = useState<Annotation | null>(null)
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null)
+  const [textDrag, setTextDrag] = useState<TextDrag | null>(null)
   const [textValue, setTextValue] = useState('')
   const [textPoint, setTextPoint] = useState<{ x: number; y: number } | null>(null)
 
@@ -97,6 +110,7 @@ export function ImageAnnotationModal({ open, image, onClose, onSave }: Props) {
     setAnnotations([])
     setDraft(null)
     setDragStart(null)
+    setTextDrag(null)
     setTextPoint(null)
     setTextValue('')
   }, [image?.src, open])
@@ -151,14 +165,49 @@ export function ImageAnnotationModal({ open, image, onClose, onSave }: Props) {
     }
   }
 
+  const findTextAnnotationAt = (point: { x: number; y: number }) => {
+    const canvas = canvasRef.current
+    if (!canvas) return null
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+
+    ctx.save()
+    setAnnotationTextStyle(ctx)
+    for (let index = annotations.length - 1; index >= 0; index -= 1) {
+      const annotation = annotations[index]
+      if (!annotation || annotation.tool !== 'text') continue
+      const width = ctx.measureText(annotation.text).width
+      const left = annotation.x - TEXT_HIT_PADDING
+      const right = annotation.x + width + TEXT_HIT_PADDING
+      const top = annotation.y - TEXT_SIZE - TEXT_HIT_PADDING
+      const bottom = annotation.y + TEXT_HIT_PADDING
+      if (point.x >= left && point.x <= right && point.y >= top && point.y <= bottom) {
+        ctx.restore()
+        return { index, annotation }
+      }
+    }
+    ctx.restore()
+    return null
+  }
+
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId)
+    const point = getCanvasPoint(event)
+    const hitText = findTextAnnotationAt(point)
+    if (hitText) {
+      setTextDrag({
+        index: hitText.index,
+        offsetX: point.x - hitText.annotation.x,
+        offsetY: point.y - hitText.annotation.y,
+      })
+      setTextPoint(null)
+      return
+    }
     if (tool === 'text') {
-      setTextPoint(getCanvasPoint(event))
+      setTextPoint(point)
       setTextValue('')
       return
     }
-    const point = getCanvasPoint(event)
     setDragStart(point)
     setDraft(tool === 'rect'
       ? { tool: 'rect', x: point.x, y: point.y, width: 0, height: 0 }
@@ -166,8 +215,16 @@ export function ImageAnnotationModal({ open, image, onClose, onSave }: Props) {
   }
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!dragStart) return
     const point = getCanvasPoint(event)
+    if (textDrag) {
+      setAnnotations((current) => current.map((annotation, index) => (
+        index === textDrag.index && annotation.tool === 'text'
+          ? { ...annotation, x: point.x - textDrag.offsetX, y: point.y - textDrag.offsetY }
+          : annotation
+      )))
+      return
+    }
+    if (!dragStart) return
     setDraft(tool === 'rect'
       ? { tool: 'rect', x: dragStart.x, y: dragStart.y, width: point.x - dragStart.x, height: point.y - dragStart.y }
       : { tool: 'arrow', x1: dragStart.x, y1: dragStart.y, x2: point.x, y2: point.y })
@@ -176,6 +233,10 @@ export function ImageAnnotationModal({ open, image, onClose, onSave }: Props) {
   const commitDraft = (event?: React.PointerEvent<HTMLCanvasElement>) => {
     if (event?.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    if (textDrag) {
+      setTextDrag(null)
+      return
     }
     if (!draft) return
     setAnnotations((current) => [...current, draft])

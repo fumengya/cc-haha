@@ -367,6 +367,7 @@ function BackgroundTaskEventCard({ message }: { message: BackgroundTaskEvent }) 
 
 function isAgentBackgroundTaskMessage(message: UIMessage): boolean {
   if (message.type !== 'background_task') return false
+  if (message.task.taskType === 'dream') return true
   if (message.task.taskType === 'local_agent' || message.task.taskType === 'remote_agent') {
     return true
   }
