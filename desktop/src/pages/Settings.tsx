@@ -51,7 +51,7 @@ import { TraceList } from './TraceList'
 import { ActivitySettings } from './ActivitySettings'
 import { MemorySettings } from './MemorySettings'
 import { ProjectRulesSettings } from './ProjectRulesSettings'
-import { useUIStore, type SettingsTab } from '../stores/uiStore'
+import { useUIStore } from '../stores/uiStore'
 import { ClaudeOfficialLogin } from '../components/settings/ClaudeOfficialLogin'
 import { ChatGPTOfficialLogin } from '../components/settings/ChatGPTOfficialLogin'
 import {

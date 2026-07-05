@@ -43,14 +43,7 @@ const TOOL_ICONS: Record<string, string> = {
 const WRITER_PREVIEW_MAX_LINES = 120
 const WRITER_PREVIEW_MAX_CHARS = 30000
 
-type ContentStats = {
-  lines: number
-  chars: number
-  visibleLines?: number
-  windowed?: boolean
-}
-
-export const ToolCallBlock = memo(function ToolCallBlock({ toolName, input, result, compact = false, isPending = false, status, partialInput }: Props) {
+export const ToolCallBlock = memo(function ToolCallBlock({ toolName, input, result, compact = false, isPending = false, partialInput }: Props) {
   const isExitPlanTool = isExitPlanModeTool(toolName)
   const isEnterPlanTool = isEnterPlanModeTool(toolName)
   const [expanded, setExpanded] = useState(isExitPlanTool)

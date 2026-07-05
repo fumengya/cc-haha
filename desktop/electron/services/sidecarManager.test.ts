@@ -293,7 +293,6 @@ describe('Electron sidecar manager', () => {
     await expect(reserveServerPort('127.0.0.1', [0, -1, 1.5, 70000])).resolves.toBeGreaterThan(0)
   })
 
-<<<<<<< HEAD
   it('builds a quick tunnel plan pointing at the local server port', () => {
     const plan = createTunnelPlan({
       cloudflaredPath: '/usr/local/bin/cloudflared',

@@ -1895,7 +1895,8 @@ export class SessionService {
     } catch (err) {
       if (
         err instanceof Error &&
-        err.message.includes('Config accessed before allowed')
+        (err.message.includes('Config accessed before allowed') ||
+          err.message.includes('ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN env var is required'))
       ) {
         return 0
       }

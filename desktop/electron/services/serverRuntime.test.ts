@@ -68,6 +68,7 @@ const harness = String.raw`
   mock.module('./electron/services/sidecarManager.ts', () => ({
     SERVER_BIND_HOST: '0.0.0.0',
     SERVER_CONTROL_HOST: '127.0.0.1',
+    SERVER_STARTUP_TIMEOUT_MS: 30_000,
     createAdapterPlan: () => ({ command: '/fake', args: [], env: {} }),
     createServerPlan: () => ({ command: '/fake', args: [], env: {} }),
     createTunnelPlan: ({ mode }) => ({

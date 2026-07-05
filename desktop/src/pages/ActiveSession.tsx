@@ -41,7 +41,6 @@ import { isDesktopRuntime } from '../lib/desktopRuntime'
 import { formatTokenCount } from '../lib/formatTokenCount'
 import { publicAssetPath } from '../lib/publicAsset'
 import {
-import {
   COMPOSER_PREFILL_EVENT,
   WelcomeTaskCards,
   type ComposerPrefillDetail,
