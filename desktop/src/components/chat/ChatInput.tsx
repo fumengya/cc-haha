@@ -15,7 +15,7 @@ import {
 import { sessionsApi, type SessionGitInfo } from '../../api/sessions'
 import { agentsApi } from '../../api/agents'
 import { PermissionModeSelector } from '../controls/PermissionModeSelector'
-import { ModelSelector } from '../controls/ModelSelector'
+import { ModelSelector, type ModelSelectorHandle } from '../controls/ModelSelector'
 import type { AttachmentRef, DisplayAttachmentRef } from '../../types/chat'
 import { AttachmentGallery } from './AttachmentGallery'
 import { ImageAnnotationModal } from './ImageAnnotationModal'
@@ -50,6 +50,7 @@ import {
   COMPOSER_PREFILL_EVENT,
   type ComposerPrefillDetail,
 } from '../welcome/WelcomeTaskCards'
+import type { PermissionMode } from '../../types/settings'
 
 type GitInfo = SessionGitInfo
 
@@ -122,6 +123,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const modelSelectorRef = useRef<ModelSelectorHandle>(null)
   const plusMenuRef = useRef<HTMLDivElement>(null)
   const slashMenuRef = useRef<HTMLDivElement>(null)
   const fileSearchRef = useRef<FileSearchMenuHandle>(null)
@@ -628,12 +630,21 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
   ) => {
     if (!activeTabId) return null
     const oldId = activeTabId
-    const { createSession, deleteSession } = useSessionStore.getState()
+    const sessionStore = useSessionStore.getState()
+    const { createSession, deleteSession } = sessionStore
     const { replaceTabSession } = useTabStore.getState()
     const { disconnectSession, connectToSession, setComposerDraft } = useChatStore.getState()
+    const permissionMode = sessionStore.sessions.find((session) => session.id === oldId)
+      ?.permissionMode as PermissionMode | undefined
+    const createOptions = repository || permissionMode
+      ? {
+          ...(repository ? { repository } : {}),
+          ...(permissionMode ? { permissionMode } : {}),
+        }
+      : undefined
     const newId = await createSession(
       workDir || undefined,
-      repository ? { repository } : undefined,
+      createOptions,
     )
     if (inputRef.current.length > 0 || attachmentsRef.current.length > 0) {
       setComposerDraft(newId, {
@@ -685,6 +696,15 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
     if (pendingSlashUiAction?.type === 'settings') {
       useUIStore.getState().setPendingSettingsTab(pendingSlashUiAction.tab)
       useTabStore.getState().openTab(SETTINGS_TAB_ID, 'Settings', 'settings')
+      setComposerInput('')
+      setSlashMenuOpen(false)
+      setFileSearchOpen(false)
+      setPlusMenuOpen(false)
+      return
+    }
+
+    if (pendingSlashUiAction?.type === 'model') {
+      modelSelectorRef.current?.open()
       setComposerInput('')
       setSlashMenuOpen(false)
       setFileSearchOpen(false)
@@ -1634,7 +1654,7 @@ export function ChatInput({ variant = 'default', compact = false }: ChatInputPro
                 />
               )}
               {!isMemberSession && activeTabId && (
-                <ModelSelector runtimeKey={activeTabId} disabled={isActive} compact={useCompactControls} />
+                <ModelSelector ref={modelSelectorRef} runtimeKey={activeTabId} disabled={isActive} compact={useCompactControls} />
               )}
               <button
                 onClick={!isMemberSession && isActive ? () => stopGeneration(activeTabId!) : handleSubmit}

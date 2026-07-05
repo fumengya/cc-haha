@@ -35,11 +35,9 @@ import {
   normalizeModelMapping,
   normalizeProvidersIndex,
 } from './providerRuntimeEnv.js'
-import { getProxyFetchOptions } from '../../utils/proxy.js'
 import {
-  getManualNetworkProxyUrl,
+  getNetworkProxyFetchOptions,
   loadNetworkSettings,
-  mergeLoopbackNoProxy,
   type NetworkSettings,
 } from './networkSettings.js'
 import { normalizeModelStringForAPI } from '../../utils/model/model.js'
@@ -229,6 +227,7 @@ export class ProviderService {
       ...(input.autoCompactWindow !== undefined && { autoCompactWindow: input.autoCompactWindow }),
       ...(input.modelContextWindows !== undefined && { modelContextWindows: input.modelContextWindows }),
       toolSearchEnabled: input.toolSearchEnabled ?? true,
+      ...(input.disableExperimentalBetas === true && { disableExperimentalBetas: true }),
       ...(input.notes !== undefined && { notes: input.notes }),
     }
 
@@ -257,6 +256,7 @@ export class ProviderService {
       ...(typeof input.autoCompactWindow === 'number' && { autoCompactWindow: input.autoCompactWindow }),
       ...(input.modelContextWindows !== undefined && input.modelContextWindows !== null && { modelContextWindows: input.modelContextWindows }),
       ...(input.toolSearchEnabled !== undefined && { toolSearchEnabled: input.toolSearchEnabled }),
+      ...(input.disableExperimentalBetas === true && { disableExperimentalBetas: true }),
       ...(input.notes !== undefined && { notes: input.notes }),
     }
     if (input.model1mSupport === null) {
@@ -281,6 +281,9 @@ export class ProviderService {
     // and forces a CLI restart even when the (providerId, modelId, effort)
     // tuple is unchanged. See SavedProviderSchema.revision docstring.
     updated.revision = (existing.revision ?? 0) + 1
+    if (input.disableExperimentalBetas === false) {
+      delete updated.disableExperimentalBetas
+    }
 
     index.providers[idx] = updated
     await this.writeIndex(index)
@@ -740,11 +743,7 @@ export class ProviderService {
     const start = Date.now()
     try {
       const { url, headers, body } = buildDirectTestRequest(base, apiKey, modelId, format, authStrategy)
-      const proxyOptions = getProxyFetchOptions({
-        proxyUrl: getManualNetworkProxyUrl(networkSettings),
-        targetUrl: url,
-        noProxy: mergeLoopbackNoProxy(process.env.no_proxy || process.env.NO_PROXY),
-      })
+      const proxyOptions = getNetworkProxyFetchOptions(networkSettings, url)
       const response = await fetch(url, {
         method: 'POST',
         headers,
@@ -807,11 +806,7 @@ export class ProviderService {
         transformedBody = anthropicToOpenaiResponses(anthropicReq)
         upstreamUrl = `${base}/v1/responses`
       }
-      const proxyOptions = getProxyFetchOptions({
-        proxyUrl: getManualNetworkProxyUrl(networkSettings),
-        targetUrl: upstreamUrl,
-        noProxy: mergeLoopbackNoProxy(process.env.no_proxy || process.env.NO_PROXY),
-      })
+      const proxyOptions = getNetworkProxyFetchOptions(networkSettings, upstreamUrl)
 
       // Call upstream with transformed request
       const response = await fetch(upstreamUrl, {
