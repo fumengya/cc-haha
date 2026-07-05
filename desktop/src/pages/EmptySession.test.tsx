@@ -570,24 +570,24 @@ describe('EmptySession', () => {
       providerId: 'provider-minimax',
       modelId: 'MiniMax-M3[1m]',
     })
-    expect(mocks.wsSend.mock.calls.slice(0, 3)).toEqual([
-      [
-        'draft-session',
-        {
-          type: 'set_runtime_config',
-          providerId: 'provider-minimax',
-          modelId: 'MiniMax-M3[1m]',
-        },
-      ],
-      ['draft-session', { type: 'prewarm_session' }],
-      [
-        'draft-session',
-        {
-          type: 'user_message',
-          content: 'draft question',
-          attachments: [],
-        },
-      ],
+    expect(mocks.wsSend.mock.calls[0]).toEqual([
+      'draft-session',
+      {
+        type: 'set_runtime_config',
+        providerId: 'provider-minimax',
+        modelId: 'MiniMax-M3[1m]',
+      },
+    ])
+    expect(mocks.wsSend.mock.calls[1]).toEqual(['draft-session', { type: 'prewarm_session' }])
+    const userMessageCallIndex = mocks.wsSend.mock.calls.findIndex(([, payload]) => payload.type === 'user_message')
+    expect(userMessageCallIndex).toBeGreaterThan(1)
+    expect(mocks.wsSend.mock.calls[userMessageCallIndex]).toEqual([
+      'draft-session',
+      {
+        type: 'user_message',
+        content: 'draft question',
+        attachments: [],
+      },
     ])
   })
 

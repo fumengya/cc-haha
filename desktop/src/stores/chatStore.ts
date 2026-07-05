@@ -2395,11 +2395,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         // If an AskUserQuestion prompt was still pending (e.g. a malformed
         // question call that errored out), surface a visible notice before the
         // card is cleared so it does not vanish silently.
-        if (session.pendingPermission?.toolName === 'AskUserQuestion') {
-          update((s) => ({ messages: [...s.messages, makeDroppedQuestionMessage()] }))
-        }
+        const finalMessagesWithDroppedQuestionNotice = session.pendingPermission?.toolName === 'AskUserQuestion'
+          ? [...finalMessages, makeDroppedQuestionMessage()]
+          : finalMessages
         update(() => ({
-          messages: finalMessages,
+          messages: finalMessagesWithDroppedQuestionNotice,
           tokenUsage: msg.usage,
           chatState: 'idle',
           activeThinkingId: null,
@@ -3169,7 +3169,7 @@ function upsertBackgroundAgentTask(
   }
   const eventStartedAt = Number.isFinite(event.startedAt) ? event.startedAt : undefined
   const eventUpdatedAt = Number.isFinite(event.updatedAt) ? event.updatedAt : undefined
-  const startsNewLifecycle = Boolean(existing && (
+  const startsNewLifecycle = Boolean(existing && existingKey === event.taskId && (
     (existing.status !== 'running' && event.status === 'running') ||
     (existing.status !== 'running' && event.status !== 'running' && hasTerminalTaskPayloadChanged(existing, event))
   ))
@@ -3188,7 +3188,9 @@ function upsertBackgroundAgentTask(
       lastToolName: event.lastToolName ?? existing?.lastToolName,
       outputFile: event.outputFile ?? existing?.outputFile,
       usage: event.usage ?? existing?.usage,
-      startedAt: startsNewLifecycle ? now : existing?.startedAt ?? eventStartedAt ?? now,
+      startedAt: startsNewLifecycle
+        ? eventStartedAt ?? now
+        : existing?.startedAt ?? eventStartedAt ?? now,
       updatedAt: eventUpdatedAt ?? now,
     },
   }

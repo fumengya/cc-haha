@@ -689,9 +689,7 @@ export class ProviderService {
       headers['Authorization'] = `Bearer ${input.apiKey}`
     }
 
-    const proxyOptions = getProxyFetchOptions({
-      proxyUrl: getManualNetworkProxyUrl(networkSettings),
-    })
+    const proxyOptions = getNetworkProxyFetchOptions(networkSettings, url)
     let response: Response
     try {
       response = await fetch(url, {
