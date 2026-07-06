@@ -36,6 +36,7 @@ import { writeWindowSmokeSnapshot } from './services/windowSmoke'
 import {
   installWindowLifecycle,
   readWindowState,
+  refreshWindowsDragHitTest,
   restoreWindowMaximized,
   saveWindowState,
   showMainWindow,
@@ -328,6 +329,7 @@ function registerIpcHandlers() {
   registerHandler(ELECTRON_IPC_CHANNELS.previewNavigate, (_event, payload) => getPreviewService().navigate(String(payload)))
   registerHandler(ELECTRON_IPC_CHANNELS.previewSetBounds, (_event, payload) => getPreviewService().setBounds(payload as PreviewBounds))
   registerHandler(ELECTRON_IPC_CHANNELS.previewSetVisible, (_event, payload) => getPreviewService().setVisible(Boolean(payload)))
+  registerHandler(ELECTRON_IPC_CHANNELS.previewSetZoom, (_event, payload) => getPreviewService().setZoomFactor(payload))
   registerHandler(ELECTRON_IPC_CHANNELS.previewClose, () => getPreviewService().close())
   registerHandler(ELECTRON_IPC_CHANNELS.previewMessage, (event, payload) => getPreviewService().message(payload, event.sender))
   registerHandler(ELECTRON_IPC_CHANNELS.appModeGet, () => getAppMode(app))
@@ -390,6 +392,7 @@ async function createMainWindow() {
 
   restoreWindowMaximized(mainWindow, restoredState)
   showMainWindow(mainWindow, app)
+  refreshWindowsDragHitTest(mainWindow, process.platform)
   writeWindowSmokeSnapshot(mainWindow, 'after-final-show')
 }
 
