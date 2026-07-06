@@ -183,6 +183,7 @@ describe('TraceSession', () => {
 
   afterEach(() => {
     cleanup()
+    vi.useRealTimers()
     vi.clearAllMocks()
     useSessionStore.setState({ sessions: [], activeSessionId: null, isLoading: false, error: null })
     useSettingsStore.setState({ locale: 'en' })
@@ -428,13 +429,17 @@ describe('TraceSession', () => {
       .mockResolvedValueOnce({ messages: pendingMessages })
       .mockResolvedValue({ messages: baseMessages })
 
-    await renderReady(20)
+    await renderReady()
 
-    const tree = within(screen.getByTestId('trace-tree'))
+    let tree = within(screen.getByTestId('trace-tree'))
     fireEvent.click(tree.getByText('Bash'))
     expect(within(screen.getByTestId('trace-detail')).queryByText('file.txt')).not.toBeInTheDocument()
 
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh trace' }))
     await waitFor(() => expect(sessionsApi.getMessages).toHaveBeenCalledTimes(2))
+
+    tree = within(screen.getByTestId('trace-tree'))
+    fireEvent.click(tree.getByText('Bash'))
     expect(within(screen.getByTestId('trace-detail')).getByText('file.txt')).toBeInTheDocument()
   })
 
