@@ -304,6 +304,7 @@ export function ActiveSession() {
   const activeTabType = useTabStore((s) => s.tabs.find((tab) => tab.sessionId === s.activeTabId)?.type ?? null)
   const sessions = useSessionStore((s) => s.sessions)
   const connectToSession = useChatStore((s) => s.connectToSession)
+  const stopBackgroundTask = useChatStore((s) => s.stopBackgroundTask)
   const sessionState = useChatStore((s) => activeTabId ? s.sessions[activeTabId] : undefined)
   // Hand-off context attached to this session (if any). Drives a small chip
   // in the header so the user remembers the AI started with summarized
@@ -794,6 +795,7 @@ export function ActiveSession() {
                   ]),
                 }))
               }}
+              onStopTask={(taskId) => stopBackgroundTask(activeTabId, taskId)}
             />
           )}
 

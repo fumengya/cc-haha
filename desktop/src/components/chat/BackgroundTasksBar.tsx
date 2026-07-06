@@ -9,6 +9,7 @@ type BackgroundTasksBarProps = {
   compact?: boolean
   dismissedFinishedTaskKeys?: Set<string>
   onClearFinished?: (taskKeys: string[]) => void
+  onStopTask?: (taskId: string) => void
 }
 
 const EMPTY_DISMISSED_TASK_KEYS = new Set<string>()
@@ -18,6 +19,7 @@ export function BackgroundTasksBar({
   compact = false,
   dismissedFinishedTaskKeys,
   onClearFinished,
+  onStopTask,
 }: BackgroundTasksBarProps) {
   const t = useTranslation()
   const [open, setOpen] = useState(false)
@@ -116,7 +118,7 @@ export function BackgroundTasksBar({
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-            <TaskSection title={t('chat.backgroundTasks.running')} tasks={runningTasks} />
+            <TaskSection title={t('chat.backgroundTasks.running')} tasks={runningTasks} onStopTask={onStopTask} />
 
             <div className="mt-5 flex items-center justify-between">
               <h3 className="text-[13px] font-semibold text-[var(--color-text-secondary)]">
@@ -146,30 +148,38 @@ export function BackgroundTasksBar({
   )
 }
 
-function TaskSection({ title, tasks }: { title: string; tasks: BackgroundAgentTask[] }) {
+function TaskSection({
+  title,
+  tasks,
+  onStopTask,
+}: {
+  title: string
+  tasks: BackgroundAgentTask[]
+  onStopTask?: (taskId: string) => void
+}) {
   if (tasks.length === 0) return null
 
   return (
     <section>
       <h3 className="mb-2 text-[13px] font-semibold text-[var(--color-text-secondary)]">{title}</h3>
-      <TaskList tasks={tasks} />
+      <TaskList tasks={tasks} onStopTask={onStopTask} />
     </section>
   )
 }
 
-function TaskList({ tasks }: { tasks: BackgroundAgentTask[] }) {
+function TaskList({ tasks, onStopTask }: { tasks: BackgroundAgentTask[]; onStopTask?: (taskId: string) => void }) {
   if (tasks.length === 0) return null
 
   return (
     <div className="space-y-2">
       {tasks.map((task) => (
-        <BackgroundTaskRow key={task.taskId} task={task} />
+        <BackgroundTaskRow key={task.taskId} task={task} onStopTask={onStopTask} />
       ))}
     </div>
   )
 }
 
-function BackgroundTaskRow({ task }: { task: BackgroundAgentTask }) {
+function BackgroundTaskRow({ task, onStopTask }: { task: BackgroundAgentTask; onStopTask?: (taskId: string) => void }) {
   const t = useTranslation()
   const title = task.description?.trim() ||
     task.summary?.trim() ||
@@ -208,6 +218,16 @@ function BackgroundTaskRow({ task }: { task: BackgroundAgentTask }) {
             {tokenLabel ? <span>{tokenLabel}</span> : null}
           </div>
         </div>
+        {task.status === 'running' && onStopTask ? (
+          <button
+            type="button"
+            aria-label={t('chat.backgroundTasks.stopTask', { title })}
+            onClick={() => onStopTask(task.taskId)}
+            className="shrink-0 rounded-md px-2 py-1 text-[12px] font-medium text-[var(--color-text-tertiary)] transition-colors hover:bg-[var(--color-surface-container)] hover:text-[var(--color-error)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-focus)]"
+          >
+            {t('common.stop')}
+          </button>
+        ) : null}
       </div>
     </div>
   )

@@ -216,6 +216,7 @@ type ChatStore = {
   setSessionCoordinatorMode: (sessionId: string, enabled: boolean) => void
   setSessionSoloPipelineMode: (sessionId: string, enabled: boolean) => void
   stopGeneration: (sessionId: string) => void
+  stopBackgroundTask: (sessionId: string, taskId: string) => void
   loadHistory: (sessionId: string) => Promise<void>
   reloadHistory: (sessionId: string) => Promise<void>
   queueComposerPrefill: (
@@ -1586,6 +1587,36 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     useTabStore.getState().updateTabStatus(sessionId, hasRunningBackgroundAgents ? 'running' : 'idle')
   },
 
+  stopBackgroundTask: (sessionId, taskId) => {
+    wsManager.send(sessionId, { type: 'stop_background_task', taskId })
+    set((state) => {
+      const session = state.sessions[sessionId]
+      const task = session?.backgroundAgentTasks?.[taskId]
+      if (!session || !task || task.status !== 'running') return state
+
+      const timestamp = Date.now()
+      const backgroundAgentTasks = {
+        ...(session.backgroundAgentTasks ?? {}),
+        [taskId]: {
+          ...task,
+          status: 'stopped' as const,
+          updatedAt: timestamp,
+        },
+      }
+      return {
+        sessions: updateSessionIn(state.sessions, sessionId, () =>
+          buildBackgroundTaskSessionUpdate(session, backgroundAgentTasks, backgroundAgentTasks[taskId], timestamp),
+        ),
+      }
+    })
+
+    const session = get().sessions[sessionId]
+    useTabStore.getState().updateTabStatus(
+      sessionId,
+      hasRunningBackgroundTasks(session?.backgroundAgentTasks) ? 'running' : 'idle',
+    )
+  },
+
   loadHistory: async (sessionId) => {
     const existingLoad = historyLoadsInFlight.get(sessionId)
     if (existingLoad) return existingLoad
@@ -2698,6 +2729,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               hasRunningBackgroundAgentsAfterUpdate = hasRunningBackgroundTasks(backgroundAgentTasks)
               const task = backgroundAgentTasks[taskEvent.taskId]
               const suppressNotificationResponse =
+                !isAgentBackgroundTask(taskEvent) &&
                 (taskEvent.status === 'completed' ||
                   taskEvent.status === 'failed' ||
                   taskEvent.status === 'stopped') &&

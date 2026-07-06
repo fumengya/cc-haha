@@ -564,6 +564,73 @@ describe('ActiveSession task polling', () => {
     expect(within(drawer).getByText('Finished')).toBeInTheDocument()
     expect(within(drawer).getByText('Capture final screenshots')).toBeInTheDocument()
     expect(within(drawer).getByText('Bash')).toBeInTheDocument()
+    expect(within(drawer).getByRole('button', { name: 'Stop background task: Verify the todo app' })).toBeInTheDocument()
+  })
+
+  it('stops a running background task from the drawer', () => {
+    const sessionId = 'background-agent-stop-session'
+    const stopBackgroundTask = vi.fn()
+    useSettingsStore.setState({ locale: 'en' })
+    useSessionStore.setState({
+      sessions: [{
+        id: sessionId,
+        title: 'Background Agent Session',
+        createdAt: '2026-05-07T00:00:00.000Z',
+        modifiedAt: '2026-05-07T00:00:00.000Z',
+        messageCount: 1,
+        projectPath: '/workspace/project',
+        workDir: '/workspace/project',
+        workDirExists: true,
+      }],
+      activeSessionId: sessionId,
+      isLoading: false,
+      error: null,
+    })
+    useTabStore.setState({
+      tabs: [{ sessionId, title: 'Background Agent Session', type: 'session', status: 'running' }],
+      activeTabId: sessionId,
+    })
+    useChatStore.setState({
+      sessions: {
+        [sessionId]: {
+          messages: [{ id: 'msg-1', type: 'assistant_text', content: 'task started', timestamp: 1 }],
+          backgroundAgentTasks: {
+            'agent-task-1': {
+              taskId: 'agent-task-1',
+              toolUseId: 'agent-tool-1',
+              status: 'running',
+              taskType: 'local_agent',
+              description: 'Verify the todo app',
+              startedAt: 1,
+              updatedAt: 2,
+            },
+          },
+          chatState: 'idle',
+          connectionState: 'connected',
+          streamingText: '',
+          streamingToolInput: '',
+          activeToolUseId: null,
+          activeToolName: null,
+          activeThinkingId: null,
+          pendingPermission: null,
+          pendingComputerUsePermission: null,
+          tokenUsage: { input_tokens: 0, output_tokens: 0 },
+          streamingResponseChars: 0,
+          elapsedSeconds: 0,
+          statusVerb: '',
+          slashCommands: [],
+          agentTaskNotifications: {},
+          elapsedTimer: null,
+        },
+      },
+      stopBackgroundTask,
+    })
+
+    render(<ActiveSession />)
+    fireEvent.click(screen.getByRole('button', { name: '1 running task' }))
+    fireEvent.click(within(screen.getByTestId('background-tasks-drawer')).getByRole('button', { name: 'Stop background task: Verify the todo app' }))
+
+    expect(stopBackgroundTask).toHaveBeenCalledWith(sessionId, 'agent-task-1')
   })
 
   it('localizes the background task entry point', () => {

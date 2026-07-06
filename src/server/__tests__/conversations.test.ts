@@ -1703,6 +1703,49 @@ describe('WebSocket Chat Integration', () => {
     }, 'runtime config failure diagnostic event')
   })
 
+  it('should forward stop_background_task to the CLI control channel', async () => {
+    const controlRequests: Array<{ sessionId: string; request: Record<string, unknown> }> = []
+    const originalRequestControl = conversationService.requestControl.bind(conversationService)
+    conversationService.requestControl = async (sessionId, request) => {
+      controlRequests.push({ sessionId, request })
+      return {}
+    }
+
+    try {
+      const ws = new WebSocket(`${wsUrl}/ws/chat-test-stop-background-task`)
+
+      await new Promise<void>((resolve) => {
+        ws.onmessage = (e) => {
+          const msg = JSON.parse(e.data as string)
+          if (msg.type === 'connected') {
+            ws.send(JSON.stringify({ type: 'stop_background_task', taskId: 'agent-task-1' }))
+            setTimeout(() => {
+              ws.close()
+              resolve()
+            }, 25)
+          }
+        }
+        ws.onerror = () => {
+          ws.close()
+          resolve()
+        }
+        setTimeout(() => {
+          ws.close()
+          resolve()
+        }, 3000)
+      })
+    } finally {
+      conversationService.requestControl = originalRequestControl
+    }
+
+    expect(controlRequests).toEqual([
+      {
+        sessionId: 'chat-test-stop-background-task',
+        request: { subtype: 'stop_task', task_id: 'agent-task-1' },
+      },
+    ])
+  })
+
   it('should handle stop_generation and return idle status', async () => {
     const messages: any[] = []
     const ws = new WebSocket(`${wsUrl}/ws/chat-test-2`)

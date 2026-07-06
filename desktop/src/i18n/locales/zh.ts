@@ -1615,6 +1615,7 @@ export const zh: Record<TranslationKey, string> = {
   'chat.backgroundTasks.finished': '已完成',
   'chat.backgroundTasks.clear': '清除',
   'chat.backgroundTasks.close': '关闭后台任务',
+  'chat.backgroundTasks.stopTask': '停止后台任务：{title}',
   'chat.backgroundTasks.command': '后台命令',
   'chat.backgroundTasks.workflow': '后台工作流',
   'chat.backgroundTasks.task': '后台任务',

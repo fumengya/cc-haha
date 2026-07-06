@@ -314,6 +314,10 @@ export const handleWebSocket = {
           handleStopGeneration(ws)
           break
 
+        case 'stop_background_task':
+          void handleStopBackgroundTask(ws, message)
+          break
+
         case 'ping':
           ws.send(JSON.stringify({ type: 'pong' } satisfies ServerMessage))
           break
@@ -1182,6 +1186,36 @@ async function restartSessionWithRuntimeConfig(
       code: 'CLI_RESTART_FAILED',
     })
     sendMessage(ws, { type: 'status', state: 'idle' })
+  }
+}
+
+async function handleStopBackgroundTask(
+  ws: ServerWebSocket<WebSocketData>,
+  message: Extract<ClientMessage, { type: 'stop_background_task' }>,
+) {
+  const { sessionId } = ws.data
+  const taskId = message.taskId?.trim()
+  if (!taskId) {
+    sendMessage(ws, {
+      type: 'error',
+      message: 'Background task id is required.',
+      code: 'BACKGROUND_TASK_STOP_INVALID',
+    })
+    return
+  }
+
+  try {
+    await conversationService.requestControl(sessionId, {
+      subtype: 'stop_task',
+      task_id: taskId,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    sendMessage(ws, {
+      type: 'error',
+      message: `Failed to stop background task: ${message}`,
+      code: 'BACKGROUND_TASK_STOP_FAILED',
+    })
   }
 }
 
