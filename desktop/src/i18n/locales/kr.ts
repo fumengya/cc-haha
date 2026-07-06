@@ -1613,6 +1613,7 @@ export const kr: Record<TranslationKey, string> = {
   'chat.backgroundTasks.finished': '완료됨',
   'chat.backgroundTasks.clear': '지우기',
   'chat.backgroundTasks.close': '백그라운드 작업 닫기',
+  'chat.backgroundTasks.stopTask': '백그라운드 작업 중지: {title}',
   'chat.backgroundTasks.command': '백그라운드 명령',
   'chat.backgroundTasks.workflow': '백그라운드 워크플로',
   'chat.backgroundTasks.task': '백그라운드 작업',

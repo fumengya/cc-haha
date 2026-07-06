@@ -1613,6 +1613,7 @@ export const zh: Record<TranslationKey, string> = {
   'chat.backgroundTasks.finished': '已完成',
   'chat.backgroundTasks.clear': '清除',
   'chat.backgroundTasks.close': '關閉後臺任務',
+  'chat.backgroundTasks.stopTask': '停止後臺任務：{title}',
   'chat.backgroundTasks.command': '後臺命令',
   'chat.backgroundTasks.workflow': '後臺工作流',
   'chat.backgroundTasks.task': '後臺任務',

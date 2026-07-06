@@ -1613,6 +1613,7 @@ export const jp: Record<TranslationKey, string> = {
   'chat.backgroundTasks.finished': '完了',
   'chat.backgroundTasks.clear': 'クリア',
   'chat.backgroundTasks.close': 'バックグラウンドタスクを閉じる',
+  'chat.backgroundTasks.stopTask': 'バックグラウンドタスクを停止: {title}',
   'chat.backgroundTasks.command': 'バックグラウンドコマンド',
   'chat.backgroundTasks.workflow': 'バックグラウンドワークフロー',
   'chat.backgroundTasks.task': 'バックグラウンドタスク',

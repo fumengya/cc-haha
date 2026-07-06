@@ -1644,6 +1644,7 @@ export const en = {
   'chat.backgroundTasks.finished': 'Finished',
   'chat.backgroundTasks.clear': 'Clear',
   'chat.backgroundTasks.close': 'Close background tasks',
+  'chat.backgroundTasks.stopTask': 'Stop background task: {title}',
   'chat.backgroundTasks.command': 'Background command',
   'chat.backgroundTasks.workflow': 'Background workflow',
   'chat.backgroundTasks.task': 'Background task',

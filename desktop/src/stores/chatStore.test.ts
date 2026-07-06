@@ -4160,6 +4160,123 @@ describe('chatStore history mapping', () => {
     ]))
   })
 
+  it('continues assistant output after an agent task notification while other background tasks keep running', () => {
+    useChatStore.setState({
+      sessions: {
+        [TEST_SESSION_ID]: makeSession({
+          chatState: 'idle',
+          backgroundAgentTasks: {
+            'serve-task-1': {
+              taskId: 'serve-task-1',
+              status: 'running',
+              taskType: 'local_bash',
+              description: 'Serve cultivation stone page locally',
+              startedAt: 1,
+              updatedAt: 2,
+            },
+          },
+        }),
+      },
+    })
+
+    useChatStore.getState().handleServerMessage(TEST_SESSION_ID, {
+      type: 'system_notification',
+      subtype: 'task_notification',
+      data: {
+        task_id: 'agent-task-1',
+        tool_use_id: 'agent-tool-1',
+        status: 'completed',
+        task_type: 'local_agent',
+        summary: 'Verification complete.',
+      },
+    })
+    useChatStore.getState().handleServerMessage(TEST_SESSION_ID, {
+      type: 'content_start',
+      blockType: 'text',
+    })
+    useChatStore.getState().handleServerMessage(TEST_SESSION_ID, {
+      type: 'content_delta',
+      text: '验证已完成，我会继续上传。',
+    })
+    useChatStore.getState().handleServerMessage(TEST_SESSION_ID, {
+      type: 'message_complete',
+      usage: { input_tokens: 12, output_tokens: 34 },
+    })
+
+    const session = useChatStore.getState().sessions[TEST_SESSION_ID]
+    expect(session?.suppressNextTaskNotificationResponse).not.toBe(true)
+    expect(session?.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'assistant_text', content: '验证已完成，我会继续上传。' }),
+    ]))
+    expect(session?.backgroundAgentTasks?.['serve-task-1']?.status).toBe('running')
+    expect(session?.backgroundAgentTasks?.['agent-task-1']?.status).toBe('completed')
+    expect(updateTabStatusMock).toHaveBeenLastCalledWith(TEST_SESSION_ID, 'running')
+  })
+
+  it('sends stop_background_task and marks the stopped task without clearing other running tasks', () => {
+    useChatStore.setState({
+      sessions: {
+        [TEST_SESSION_ID]: makeSession({
+          chatState: 'idle',
+          backgroundAgentTasks: {
+            'serve-task-1': {
+              taskId: 'serve-task-1',
+              status: 'running',
+              taskType: 'local_bash',
+              description: 'Serve cultivation stone page locally',
+              startedAt: 1,
+              updatedAt: 2,
+            },
+            'agent-task-1': {
+              taskId: 'agent-task-1',
+              status: 'running',
+              taskType: 'local_agent',
+              description: 'Verify screenshots',
+              startedAt: 1,
+              updatedAt: 3,
+            },
+          },
+        }),
+      },
+    })
+
+    useChatStore.getState().stopBackgroundTask(TEST_SESSION_ID, 'agent-task-1')
+
+    const session = useChatStore.getState().sessions[TEST_SESSION_ID]
+    expect(sendMock).toHaveBeenCalledWith(TEST_SESSION_ID, {
+      type: 'stop_background_task',
+      taskId: 'agent-task-1',
+    })
+    expect(session?.backgroundAgentTasks?.['agent-task-1']?.status).toBe('stopped')
+    expect(session?.backgroundAgentTasks?.['serve-task-1']?.status).toBe('running')
+    expect(updateTabStatusMock).toHaveBeenLastCalledWith(TEST_SESSION_ID, 'running')
+  })
+
+  it('marks the tab idle after stopping the last running background task', () => {
+    useChatStore.setState({
+      sessions: {
+        [TEST_SESSION_ID]: makeSession({
+          chatState: 'idle',
+          backgroundAgentTasks: {
+            'serve-task-1': {
+              taskId: 'serve-task-1',
+              status: 'running',
+              taskType: 'local_bash',
+              description: 'Serve cultivation stone page locally',
+              startedAt: 1,
+              updatedAt: 2,
+            },
+          },
+        }),
+      },
+    })
+
+    useChatStore.getState().stopBackgroundTask(TEST_SESSION_ID, 'serve-task-1')
+
+    expect(useChatStore.getState().sessions[TEST_SESSION_ID]?.backgroundAgentTasks?.['serve-task-1']?.status).toBe('stopped')
+    expect(updateTabStatusMock).toHaveBeenLastCalledWith(TEST_SESSION_ID, 'idle')
+  })
+
   it('suppresses assistant output for a task-notification-only follow-up turn', () => {
     useChatStore.setState({
       sessions: {
