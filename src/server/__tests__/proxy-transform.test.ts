@@ -337,6 +337,23 @@ describe('openaiChatToAnthropic', () => {
     expect(result.usage.output_tokens).toBe(5)
   })
 
+  test('keeps requested model when provider returns a different response model', () => {
+    const res: OpenAIChatResponse = {
+      id: 'chatcmpl-model-mismatch',
+      object: 'chat.completion',
+      created: 1234567890,
+      model: 'provider-routed-model',
+      choices: [{
+        index: 0,
+        message: { role: 'assistant', content: 'Hello!' },
+        finish_reason: 'stop',
+      }],
+    }
+
+    const result = openaiChatToAnthropic(res, 'requested-model:1m')
+    expect(result.model).toBe('requested-model:1m')
+  })
+
   test('tool_calls response', () => {
     const res: OpenAIChatResponse = {
       id: 'chatcmpl-2',
@@ -621,6 +638,24 @@ describe('openaiResponsesToAnthropic', () => {
     expect(result.stop_reason).toBe('end_turn')
     expect(result.usage.input_tokens).toBe(10)
     expect(result.usage.output_tokens).toBe(5)
+  })
+
+  test('keeps requested model when provider returns a different Responses model', () => {
+    const res: OpenAIResponsesResponse = {
+      id: 'resp_model_mismatch',
+      object: 'response',
+      created_at: 1234567890,
+      model: 'provider-routed-model',
+      status: 'completed',
+      output: [{
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: 'Hello!' }],
+      }],
+    }
+
+    const result = openaiResponsesToAnthropic(res, 'requested-model:1m')
+    expect(result.model).toBe('requested-model:1m')
   })
 
   test('function_call → tool_use', () => {
