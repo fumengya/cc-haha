@@ -62,10 +62,8 @@ export function parseTaskNotificationXml(text: string): ParsedTaskNotification {
 }
 
 export function shouldForwardTaskNotificationToModel(
-  notification: ParsedTaskNotification,
-  options: { structuredOutput: boolean },
+  _notification: ParsedTaskNotification,
+  _options: { structuredOutput: boolean },
 ): boolean {
-  if (!options.structuredOutput) return true
-  if (!notification.status) return true
-  return notification.taskType !== 'local_agent'
+  return true
 }

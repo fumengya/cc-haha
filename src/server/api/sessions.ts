@@ -53,6 +53,7 @@ import { findGitRoot } from '../../utils/git.js'
 import { traceCaptureService, trimTraceCallPreviews } from '../services/traceCaptureService.js'
 
 const DEFAULT_GIT_INFO_COMMAND_TIMEOUT_MS = 3_000
+const INSPECTION_CONTEXT_TIMEOUT_MS = 5_000
 
 const workspaceService = new WorkspaceService(
   async (sessionId) => (
@@ -829,7 +830,7 @@ async function getSessionInspection(sessionId: string, url: URL): Promise<Respon
       response.context = await conversationService.requestControl(
         sessionId,
         { subtype: 'get_context_usage', estimateOnly: true },
-        20_000,
+        INSPECTION_CONTEXT_TIMEOUT_MS,
       )
     } catch (error) {
       errors.context = error instanceof Error ? error.message : String(error)

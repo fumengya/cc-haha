@@ -1588,12 +1588,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   stopBackgroundTask: (sessionId, taskId) => {
-    wsManager.send(sessionId, { type: 'stop_background_task', taskId })
+    let shouldSendStop = false
     set((state) => {
       const session = state.sessions[sessionId]
       const task = session?.backgroundAgentTasks?.[taskId]
       if (!session || !task || task.status !== 'running') return state
 
+      shouldSendStop = true
       const timestamp = Date.now()
       const backgroundAgentTasks = {
         ...(session.backgroundAgentTasks ?? {}),
@@ -1609,6 +1610,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         ),
       }
     })
+
+    if (!shouldSendStop) return
+    wsManager.send(sessionId, { type: 'stop_background_task', taskId })
 
     const session = get().sessions[sessionId]
     useTabStore.getState().updateTabStatus(

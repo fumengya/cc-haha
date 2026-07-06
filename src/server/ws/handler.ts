@@ -1211,6 +1211,12 @@ async function handleStopBackgroundTask(
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    if (
+      message.startsWith('No task found with ID:') ||
+      /Task \S+ is not running \(status: (?:completed|failed|killed|stopped)\)/.test(message)
+    ) {
+      return
+    }
     sendMessage(ws, {
       type: 'error',
       message: `Failed to stop background task: ${message}`,

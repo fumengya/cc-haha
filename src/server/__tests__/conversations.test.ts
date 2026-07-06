@@ -1746,6 +1746,47 @@ describe('WebSocket Chat Integration', () => {
     ])
   })
 
+  it('should ignore stale stop_background_task failures for already-finished tasks', async () => {
+    const messages: any[] = []
+    const originalRequestControl = conversationService.requestControl.bind(conversationService)
+    conversationService.requestControl = async () => {
+      throw new Error('Task old-task-1 is not running (status: killed)')
+    }
+
+    try {
+      const ws = new WebSocket(`${wsUrl}/ws/chat-test-stale-stop-background-task`)
+
+      await new Promise<void>((resolve) => {
+        ws.onmessage = (e) => {
+          const msg = JSON.parse(e.data as string)
+          messages.push(msg)
+          if (msg.type === 'connected') {
+            ws.send(JSON.stringify({ type: 'stop_background_task', taskId: 'old-task-1' }))
+            setTimeout(() => {
+              ws.close()
+              resolve()
+            }, 25)
+          }
+        }
+        ws.onerror = () => {
+          ws.close()
+          resolve()
+        }
+        setTimeout(() => {
+          ws.close()
+          resolve()
+        }, 3000)
+      })
+    } finally {
+      conversationService.requestControl = originalRequestControl
+    }
+
+    expect(messages).not.toContainEqual(expect.objectContaining({
+      type: 'error',
+      code: 'BACKGROUND_TASK_STOP_FAILED',
+    }))
+  })
+
   it('should handle stop_generation and return idle status', async () => {
     const messages: any[] = []
     const ws = new WebSocket(`${wsUrl}/ws/chat-test-2`)

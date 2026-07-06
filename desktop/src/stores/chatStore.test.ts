@@ -4277,6 +4277,33 @@ describe('chatStore history mapping', () => {
     expect(updateTabStatusMock).toHaveBeenLastCalledWith(TEST_SESSION_ID, 'idle')
   })
 
+  it('does not send stop_background_task for finished background tasks', () => {
+    useChatStore.setState({
+      sessions: {
+        [TEST_SESSION_ID]: makeSession({
+          chatState: 'idle',
+          backgroundAgentTasks: {
+            'serve-task-1': {
+              taskId: 'serve-task-1',
+              status: 'stopped',
+              taskType: 'local_bash',
+              description: 'Serve cultivation stone page locally',
+              startedAt: 1,
+              updatedAt: 2,
+            },
+          },
+        }),
+      },
+    })
+
+    useChatStore.getState().stopBackgroundTask(TEST_SESSION_ID, 'serve-task-1')
+
+    expect(sendMock).not.toHaveBeenCalledWith(TEST_SESSION_ID, {
+      type: 'stop_background_task',
+      taskId: 'serve-task-1',
+    })
+  })
+
   it('suppresses assistant output for a task-notification-only follow-up turn', () => {
     useChatStore.setState({
       sessions: {

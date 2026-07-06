@@ -5,7 +5,7 @@ import {
 } from './taskNotificationPolicy.js'
 
 describe('task notification policy', () => {
-  test('does not re-enter the model for local agent terminal notifications in structured output', () => {
+  test('keeps local agent terminal notifications as model input in structured output', () => {
     const notification = parseTaskNotificationXml(`<task-notification>
 <task-id>agent-1</task-id>
 <task-type>local_agent</task-type>
@@ -14,7 +14,7 @@ describe('task notification policy', () => {
 <summary>Agent "Probe" completed</summary>
 </task-notification>`)
 
-    expect(shouldForwardTaskNotificationToModel(notification, { structuredOutput: true })).toBe(false)
+    expect(shouldForwardTaskNotificationToModel(notification, { structuredOutput: true })).toBe(true)
   })
 
   test('keeps local agent notifications as model input for plain print mode', () => {
