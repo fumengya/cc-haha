@@ -674,28 +674,27 @@ describe('ConversationService', () => {
 
     const providerService = new ProviderService()
     const provider = await providerService.addProvider({
-      presetId: 'shengsuanyun',
-      name: 'Shengsuanyun',
+      presetId: 'fumeng',
+      name: 'Fumeng',
       apiKey: 'provider-key',
-      baseUrl: 'https://router.shengsuanyun.com/api',
+      baseUrl: 'https://fumeng.top',
       apiFormat: 'anthropic',
       models: {
-        main: 'anthropic/claude-sonnet-4.6',
-        haiku: 'anthropic/claude-haiku-4.5:thinking',
-        sonnet: 'anthropic/claude-sonnet-4.6',
-        opus: 'anthropic/claude-opus-4.7',
+        main: 'claude-opus-4-8',
+        haiku: 'claude-opus-4-8',
+        sonnet: 'claude-opus-4-8',
+        opus: 'claude-opus-4-8',
       },
     })
 
     const service = new ConversationService() as any
     const env = (await service.buildChildEnv('/tmp', undefined, {
       providerId: provider.id,
-      model: 'anthropic/claude-sonnet-4.6',
+      model: 'claude-opus-4-8',
     })) as Record<string, string>
 
-    expect(env.ANTHROPIC_BASE_URL).toBe('https://router.shengsuanyun.com/api')
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://fumeng.top')
     expect(env.API_TIMEOUT_MS).toBe('180000')
-    expect(env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC).toBe('1')
   })
 
   test('buildChildEnv can force official auth even when a custom default provider exists', async () => {

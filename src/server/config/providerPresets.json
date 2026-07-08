@@ -153,31 +153,28 @@
     }
   },
   {
-    "id": "shengsuanyun",
-    "name": "胜算云",
-    "baseUrl": "https://router.shengsuanyun.com/api",
-    "apiFormat": "anthropic",
+    "id": "fumeng",
+    "name": "浮梦中转",
+    "baseUrl": "https://fumeng.top",
+    "apiFormat": "openai_chat",
     "defaultModels": {
-      "main": "anthropic/claude-sonnet-4.6",
-      "haiku": "anthropic/claude-haiku-4.5:thinking",
-      "sonnet": "anthropic/claude-sonnet-4.6",
-      "opus": "anthropic/claude-opus-4.7"
+      "main": "gpt-5.5",
+      "haiku": "gpt-5.5",
+      "sonnet": "gpt-5.5",
+      "opus": "gpt-5.5"
     },
     "needsApiKey": true,
-    "websiteUrl": "https://www.shengsuanyun.com",
-    "apiKeyUrl": "https://www.shengsuanyun.com/?from=CH_LEJ88KWR",
-    "promoText": "胜算云为 cc-haha 的用户提供了特别福利，使用此链接注册的新用户可获 10 元模力及首充 10% 赠送！",
+    "websiteUrl": "https://fumeng.top/",
+    "apiKeyUrl": "https://fumeng.top/",
+    "promoText": "浮梦中转为用户提供特别福利，点击前往获取 API Key。",
     "featured": true,
-    "authStrategy": "auth_token",
+    "authStrategy": "api_key",
     "defaultEnv": {
-      "API_TIMEOUT_MS": "3000000",
-      "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-      "ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES": "none"
+      "API_TIMEOUT_MS": "3000000"
     },
     "modelContextWindows": {
-      "anthropic/claude-sonnet-4.6": 1000000,
-      "anthropic/claude-haiku-4.5:thinking": 200000,
-      "anthropic/claude-opus-4.7": 1000000
+      "gpt-5.5": 1000000,
+      "claude-opus-4-8": 1000000
     }
   },
   {

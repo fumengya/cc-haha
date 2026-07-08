@@ -1046,8 +1046,8 @@ describe('ProviderService', () => {
     test('should include preset default env on activation and runtime env', async () => {
       const svc = new ProviderService()
       const provider = await svc.addProvider(sampleInput({
-        presetId: 'shengsuanyun',
-        baseUrl: 'https://router.shengsuanyun.com/api',
+        presetId: 'fumeng',
+        baseUrl: 'https://fumeng.top',
       }))
 
       await svc.activateProvider(provider.id)
@@ -1055,22 +1055,18 @@ describe('ProviderService', () => {
       const settings = await readSettings()
       const env = settings.env as Record<string, string>
       expect(env.API_TIMEOUT_MS).toBe('3000000')
-      expect(env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC).toBe('1')
       expect(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW).toBeUndefined()
       expect(JSON.parse(env.CLAUDE_CODE_MODEL_CONTEXT_WINDOWS)).toEqual({
-        'anthropic/claude-sonnet-4.6': 1000000,
-        'anthropic/claude-haiku-4.5:thinking': 200000,
-        'anthropic/claude-opus-4.7': 1000000,
+        'gpt-5.5': 1000000,
+        'claude-opus-4-8': 1000000,
       })
 
       const runtimeEnv = await svc.getProviderRuntimeEnv(provider.id)
       expect(runtimeEnv.API_TIMEOUT_MS).toBe('3000000')
-      expect(runtimeEnv.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC).toBe('1')
       expect(runtimeEnv.CLAUDE_CODE_AUTO_COMPACT_WINDOW).toBeUndefined()
       expect(JSON.parse(runtimeEnv.CLAUDE_CODE_MODEL_CONTEXT_WINDOWS)).toEqual({
-        'anthropic/claude-sonnet-4.6': 1000000,
-        'anthropic/claude-haiku-4.5:thinking': 200000,
-        'anthropic/claude-opus-4.7': 1000000,
+        'gpt-5.5': 1000000,
+        'claude-opus-4-8': 1000000,
       })
 
       await svc.activateOfficial()

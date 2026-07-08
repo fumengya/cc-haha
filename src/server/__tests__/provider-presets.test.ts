@@ -68,7 +68,7 @@ describe('provider presets API', () => {
     const kimi = PROVIDER_PRESETS.find((preset) => preset.id === 'kimi')
     const minimax = PROVIDER_PRESETS.find((preset) => preset.id === 'minimax')
     const jiekouai = PROVIDER_PRESETS.find((preset) => preset.id === 'jiekouai')
-    const shengsuanyun = PROVIDER_PRESETS.find((preset) => preset.id === 'shengsuanyun')
+    const fumeng = PROVIDER_PRESETS.find((preset) => preset.id === 'fumeng')
 
     expect(lmstudio?.baseUrl).toBe('http://localhost:1234')
     expect(lmstudio?.apiFormat).toBe('anthropic')
@@ -109,11 +109,12 @@ describe('provider presets API', () => {
     expect(jiekouai?.defaultModels.opus).toBe('claude-opus-4-7')
     expect(jiekouai?.defaultEnv?.ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES).toBe('none')
     expect(jiekouai?.modelContextWindows?.['claude-sonnet-4-6']).toBe(1000000)
-    expect(shengsuanyun?.baseUrl).toBe('https://router.shengsuanyun.com/api')
-    expect(shengsuanyun?.authStrategy).toBe('auth_token')
-    expect(shengsuanyun?.defaultModels.main).toBe('anthropic/claude-sonnet-4.6')
-    expect(shengsuanyun?.defaultModels.haiku).toBe('anthropic/claude-haiku-4.5:thinking')
-    expect(shengsuanyun?.modelContextWindows?.['anthropic/claude-sonnet-4.6']).toBe(1000000)
+    expect(fumeng?.baseUrl).toBe('https://fumeng.top')
+    expect(fumeng?.apiFormat).toBe('openai_chat')
+    expect(fumeng?.authStrategy).toBe('api_key')
+    expect(fumeng?.defaultModels.main).toBe('gpt-5.5')
+    expect(fumeng?.defaultModels.haiku).toBe('gpt-5.5')
+    expect(fumeng?.modelContextWindows?.['gpt-5.5']).toBe(1000000)
   })
 
   test('configured presets can expose optional API key and promo metadata', () => {
@@ -124,7 +125,7 @@ describe('provider presets API', () => {
     const kimi = PROVIDER_PRESETS.find((preset) => preset.id === 'kimi')
     const minimax = PROVIDER_PRESETS.find((preset) => preset.id === 'minimax')
     const jiekouai = PROVIDER_PRESETS.find((preset) => preset.id === 'jiekouai')
-    const shengsuanyun = PROVIDER_PRESETS.find((preset) => preset.id === 'shengsuanyun')
+    const fumeng = PROVIDER_PRESETS.find((preset) => preset.id === 'fumeng')
     const custom = PROVIDER_PRESETS.find((preset) => preset.id === 'custom')
 
     expect(lmstudio?.needsApiKey).toBe(false)
@@ -157,15 +158,13 @@ describe('provider presets API', () => {
     expect(jiekouai?.apiKeyUrl).toBe('https://jiekou.ai/referral?invited_code=OBNU3K')
     expect(jiekouai?.promoText).toContain('官方 8 折')
     expect(jiekouai?.featured).toBe(true)
-    expect(shengsuanyun?.apiKeyUrl).toBe('https://www.shengsuanyun.com/?from=CH_LEJ88KWR')
-    expect(shengsuanyun?.promoText).toContain('首充 10%')
-    expect(shengsuanyun?.featured).toBe(true)
-    expect(shengsuanyun?.defaultEnv).toEqual({
+    expect(fumeng?.apiKeyUrl).toBe('https://fumeng.top/')
+    expect(fumeng?.promoText).toBe('浮梦中转为用户提供特别福利，点击前往获取 API Key。')
+    expect(fumeng?.featured).toBe(true)
+    expect(fumeng?.defaultEnv).toEqual({
       API_TIMEOUT_MS: '3000000',
-      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-      ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES: 'none',
     })
-    expect(shengsuanyun?.modelContextWindows?.['anthropic/claude-opus-4.7']).toBe(1000000)
+    expect(fumeng?.modelContextWindows?.['claude-opus-4-8']).toBe(1000000)
     expect(custom?.promoText).toBeUndefined()
     expect(custom?.authStrategy).toBe('auth_token')
     expect(custom?.defaultEnv).toBeUndefined()

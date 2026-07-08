@@ -1679,6 +1679,67 @@ describe('Settings > Providers tab', () => {
     expect(within(dialog).getByText('Requests will be translated via the local proxy')).toBeInTheDocument()
   })
 
+  it('lets Fumeng switch between OpenAI Chat and Anthropic defaults', async () => {
+    providerStoreState.presets = [
+      {
+        id: 'fumeng',
+        name: '浮梦中转',
+        baseUrl: 'https://fumeng.top',
+        apiFormat: 'openai_chat',
+        defaultModels: {
+          main: 'gpt-5.5',
+          haiku: 'gpt-5.5',
+          sonnet: 'gpt-5.5',
+          opus: 'gpt-5.5',
+        },
+        needsApiKey: true,
+        websiteUrl: 'https://fumeng.top/',
+        apiKeyUrl: 'https://fumeng.top/',
+        promoText: '浮梦中转为用户提供特别福利，点击前往获取 API Key。',
+        featured: true,
+        authStrategy: 'api_key',
+        defaultEnv: {
+          API_TIMEOUT_MS: '3000000',
+        },
+        modelContextWindows: {
+          'gpt-5.5': 1000000,
+          'claude-opus-4-8': 1000000,
+        },
+      },
+      {
+        id: 'custom',
+        name: 'Custom',
+        baseUrl: '',
+        apiFormat: 'anthropic',
+        defaultModels: {
+          main: '',
+          haiku: '',
+          sonnet: '',
+          opus: '',
+        },
+        needsApiKey: true,
+        websiteUrl: '',
+      },
+    ]
+
+    render(<Settings />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Add Provider/i }))
+    const dialog = screen.getByRole('dialog')
+
+    expect(within(dialog).getByDisplayValue('https://fumeng.top')).toBeInTheDocument()
+    expect(within(dialog).getByLabelText(/Main Model/i)).toHaveValue('gpt-5.5')
+    expect(within(dialog).getByRole('button', { name: /OpenAI Chat Completions/i })).toBeInTheDocument()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /OpenAI Chat Completions/i }))
+    fireEvent.click(within(dialog).getByRole('button', { name: /Anthropic Messages/i }))
+
+    await waitFor(() => {
+      expect(within(dialog).getByLabelText(/Main Model/i)).toHaveValue('claude-opus-4-8')
+    })
+    expect(within(dialog).getByDisplayValue('https://fumeng.top')).toBeInTheDocument()
+  })
+
   it('normalizes blank model mappings to the main model when saving a provider', async () => {
     providerStoreState.createProvider = vi.fn().mockResolvedValue({
       id: 'provider-new',

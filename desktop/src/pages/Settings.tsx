@@ -841,6 +841,34 @@ const DEFAULT_MODEL_1M_SUPPORT: Model1mSupport = {
 }
 const DEFAULT_PROVIDER_AUTH_STRATEGY: ProviderAuthStrategy = 'auth_token'
 const AUTH_ENV_KEYS = new Set(['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'])
+const FUMENG_PRESET_ID = 'fumeng'
+const FUMENG_BASE_URL = 'https://fumeng.top'
+const FUMENG_PROTOCOL_DEFAULTS: Record<'openai_chat' | 'anthropic', {
+  apiFormat: ApiFormat
+  authStrategy: ProviderAuthStrategy
+  models: ModelMapping
+}> = {
+  openai_chat: {
+    apiFormat: 'openai_chat',
+    authStrategy: 'api_key',
+    models: {
+      main: 'gpt-5.5',
+      haiku: 'gpt-5.5',
+      sonnet: 'gpt-5.5',
+      opus: 'gpt-5.5',
+    },
+  },
+  anthropic: {
+    apiFormat: 'anthropic',
+    authStrategy: 'auth_token',
+    models: {
+      main: 'claude-opus-4-8',
+      haiku: 'claude-opus-4-8',
+      sonnet: 'claude-opus-4-8',
+      opus: 'claude-opus-4-8',
+    },
+  },
+}
 type ModelSlot = typeof MODEL_SLOTS[number]
 type ModelContextInputs = Record<ModelSlot, string>
 
@@ -1530,15 +1558,19 @@ function ProviderFormModal({ open, onClose, mode, provider, presets }: ProviderF
   }, [selectedPreset.id, providerProxyBaseUrl])
 
   const handlePresetChange = (preset: ProviderPreset) => {
+    const fumengDefaults = preset.id === FUMENG_PRESET_ID ? FUMENG_PROTOCOL_DEFAULTS.openai_chat : null
+    const nextModels = stripModel1mMarkers(fumengDefaults?.models ?? preset.defaultModels)
+    const nextModel1mSupport = getInitialModel1mSupport(fumengDefaults?.models ?? preset.defaultModels)
+    const nextPreset = fumengDefaults
+      ? { ...preset, apiFormat: fumengDefaults.apiFormat, authStrategy: fumengDefaults.authStrategy, defaultModels: fumengDefaults.models }
+      : preset
     setSelectedPreset(preset)
     setName(preset.name)
-    setBaseUrl(preset.baseUrl)
-    setApiFormat(preset.apiFormat ?? 'anthropic')
-    setAuthStrategy(getPresetAuthStrategy(preset))
-    const nextModels = stripModel1mMarkers(preset.defaultModels)
-    const nextModel1mSupport = getInitialModel1mSupport(preset.defaultModels)
+    setBaseUrl(fumengDefaults ? FUMENG_BASE_URL : preset.baseUrl)
+    setApiFormat(fumengDefaults?.apiFormat ?? preset.apiFormat ?? 'anthropic')
+    setAuthStrategy(fumengDefaults?.authStrategy ?? getPresetAuthStrategy(preset))
     const nextModelContextInputs = apply1mSupportToContextInputs(
-      getModelContextInputs(nextModels, preset),
+      getModelContextInputs(nextModels, nextPreset),
       nextModel1mSupport,
     )
     setModels(nextModels)
@@ -1552,6 +1584,7 @@ function ProviderFormModal({ open, onClose, mode, provider, presets }: ProviderF
   }
 
   const isCustom = selectedPreset.id === 'custom'
+  const isFumeng = selectedPreset.id === FUMENG_PRESET_ID
   const requiresApiKey = selectedPreset.needsApiKey !== false
   const autoCompactWindowErrorKey = getAutoCompactWindowErrorKey(autoCompactWindow)
   const modelContextWindowErrorSlots = MODEL_SLOTS.filter((slot) => getModelContextWindowErrorKey(modelContextInputs[slot]))
@@ -1645,6 +1678,34 @@ function ProviderFormModal({ open, onClose, mode, provider, presets }: ProviderF
   const handleApiFormatChange = (value: ApiFormat) => {
     setApiFormat(value)
     setSettingsJson((current) => updateSettingsJsonProviderConnection(current, value, authStrategy, apiKey, selectedPreset, baseUrl, providerProxyBaseUrl, toolSearchEnabled, disableExperimentalBetas))
+  }
+  const handleFumengProtocolChange = (value: ApiFormat) => {
+    if (value !== 'openai_chat' && value !== 'anthropic') return
+    const defaults = FUMENG_PROTOCOL_DEFAULTS[value]
+    const nextPreset = { ...selectedPreset, apiFormat: defaults.apiFormat, authStrategy: defaults.authStrategy, defaultModels: defaults.models }
+    const nextModels = stripModel1mMarkers(defaults.models)
+    const nextModel1mSupport = getInitialModel1mSupport(defaults.models)
+    const nextContextInputs = apply1mSupportToContextInputs(
+      getModelContextInputs(nextModels, nextPreset),
+      nextModel1mSupport,
+    )
+    setBaseUrl(FUMENG_BASE_URL)
+    setApiFormat(defaults.apiFormat)
+    setAuthStrategy(defaults.authStrategy)
+    setModels(nextModels)
+    setModel1mSupport(nextModel1mSupport)
+    setModelContextInputs(nextContextInputs)
+    setAutoCompactWindow(getPresetAutoCompactWindow(selectedPreset))
+    setToolSearchEnabled(true)
+    setDisableExperimentalBetas(false)
+    setTestResult(null)
+    setSettingsJson((current) => {
+      const withConnection = updateSettingsJsonProviderConnection(current, defaults.apiFormat, defaults.authStrategy, apiKey, nextPreset, FUMENG_BASE_URL, providerProxyBaseUrl, true, false)
+      return updateSettingsJsonModelContextWindows(
+        updateSettingsJsonModels(withConnection, nextModels, nextModel1mSupport),
+        buildModelContextWindows(nextModels, nextContextInputs),
+      )
+    })
   }
   const handleAuthStrategyChange = (value: ProviderAuthStrategy) => {
     setAuthStrategy(value)
@@ -1916,6 +1977,28 @@ function ProviderFormModal({ open, onClose, mode, provider, presets }: ProviderF
           </div>
         )}
 
+        {isFumeng && (
+          <div>
+            <label className="text-sm font-medium text-[var(--color-text-primary)] mb-1 block">{t('settings.providers.apiFormat')}</label>
+            <Dropdown<ApiFormat>
+              items={apiFormatItems.filter((item) => item.value === 'openai_chat' || item.value === 'anthropic')}
+              value={apiFormat === 'anthropic' ? 'anthropic' : 'openai_chat'}
+              onChange={handleFumengProtocolChange}
+              width="100%"
+              className="block w-full"
+              trigger={
+                <button
+                  type="button"
+                  className="flex h-10 w-full items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-left text-sm text-[var(--color-text-primary)] outline-none transition-colors hover:border-[var(--color-border-focus)] hover:bg-[var(--color-surface-container-low)] focus-visible:border-[var(--color-border-focus)] focus-visible:shadow-[var(--shadow-focus-ring)]"
+                >
+                  <span className="min-w-0 flex-1 truncate">{selectedApiFormatLabel}</span>
+                  <span className="material-symbols-outlined flex-shrink-0 text-[18px] text-[var(--color-text-secondary)]">expand_more</span>
+                </button>
+              }
+            />
+          </div>
+        )}
+
         <Input label={t('settings.providers.name')} required value={name} onChange={(e) => setName(e.target.value)} placeholder={t('settings.providers.namePlaceholder')} />
 
         <Input label={t('settings.providers.notes')} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t('settings.providers.notesPlaceholder')} />
@@ -1923,7 +2006,7 @@ function ProviderFormModal({ open, onClose, mode, provider, presets }: ProviderF
         <Input label={t('settings.providers.baseUrl')} required value={baseUrl} onChange={(e) => handleBaseUrlChange(e.target.value)} placeholder={t('settings.providers.baseUrlPlaceholder')} />
 
         {/* API Format */}
-        {(isCustom || mode === 'edit') ? (
+        {(!isFumeng && (isCustom || mode === 'edit')) ? (
           <div>
             <label className="text-sm font-medium text-[var(--color-text-primary)] mb-1 block">{t('settings.providers.apiFormat')}</label>
             <Dropdown<ApiFormat>
@@ -1946,7 +2029,7 @@ function ProviderFormModal({ open, onClose, mode, provider, presets }: ProviderF
               <p className="text-[11px] text-[var(--color-text-tertiary)] mt-1">{t('settings.providers.proxyHint')}</p>
             )}
           </div>
-        ) : apiFormat !== 'anthropic' ? (
+        ) : !isFumeng && apiFormat !== 'anthropic' ? (
           <div>
             <label className="text-sm font-medium text-[var(--color-text-primary)] mb-1 block">{t('settings.providers.apiFormat')}</label>
             <div className="text-xs text-[var(--color-text-tertiary)] px-3 py-2 rounded-[var(--radius-md)] bg-[var(--color-surface-container-low)] border border-[var(--color-border)]">
