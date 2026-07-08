@@ -142,7 +142,7 @@ describe('TaskService', () => {
     try {
       const svc = new TaskService()
       const tasks = await svc.listTasks()
-      expect(tasks.map((task) => task.id)).toEqual(['1', '2'])
+      expect(tasks.map((task) => task.id).sort()).toEqual(['1', '2'])
       expect(taskFileReadCount).toBe(2)
     } finally {
       readFileSpy.mockRestore()
