@@ -2314,6 +2314,9 @@ describe('MessageList nested tool calls', () => {
 
     scrollIntoView.mockClear()
     await waitForProgrammaticScrollReset()
+    scrollTop = 600
+    fireEvent.scroll(scroller)
+    scrollTop = 120
     fireEvent.scroll(scroller)
 
     act(() => {
@@ -2332,6 +2335,111 @@ describe('MessageList nested tool calls', () => {
       expect(screen.getByText('streaming new token')).toBeTruthy()
     })
     expect(scrollIntoView).not.toHaveBeenCalled()
+  })
+
+  it('keeps following latest when layout growth moves the viewport away from bottom without user scrollback', async () => {
+    useChatStore.setState({
+      sessions: {
+        [ACTIVE_TAB]: makeSessionState({
+          chatState: 'streaming',
+          messages: [
+            {
+              id: 'user-1',
+              type: 'user_text',
+              content: 'latest prompt',
+              timestamp: 1,
+            },
+          ],
+          streamingText: 'streaming',
+        }),
+      },
+    })
+
+    const { container } = render(<MessageList />)
+    const scroller = container.querySelector('.overflow-y-auto') as HTMLDivElement
+    let scrollTop = 600
+    Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 1200 })
+    Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 400 })
+    Object.defineProperty(scroller, 'scrollTop', {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value) => {
+        scrollTop = value >= 1_000_000_000 ? 800 : value
+      },
+    })
+
+    await waitForProgrammaticScrollReset()
+    fireEvent.scroll(scroller)
+
+    act(() => {
+      useChatStore.setState((state) => ({
+        sessions: {
+          ...state.sessions,
+          [ACTIVE_TAB]: {
+            ...state.sessions[ACTIVE_TAB]!,
+            streamingText: 'streaming after layout growth',
+          },
+        },
+      }))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('streaming after layout growth')).toBeTruthy()
+    })
+    expect(screen.queryByRole('button', { name: 'Jump to latest' })).toBeNull()
+    expect(scrollTop).toBe(800)
+  })
+
+  it('auto-resumes following latest after a light user scrollback pause', async () => {
+    vi.useFakeTimers()
+    try {
+      useChatStore.setState({
+        sessions: {
+          [ACTIVE_TAB]: makeSessionState({
+            chatState: 'streaming',
+            messages: [
+              {
+                id: 'user-1',
+                type: 'user_text',
+                content: 'light review prompt',
+                timestamp: 1,
+              },
+            ],
+            streamingText: 'streaming',
+          }),
+        },
+      })
+
+      const { container } = render(<MessageList />)
+      const scroller = container.querySelector('.overflow-y-auto') as HTMLDivElement
+      let scrollTop = 800
+      Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 1200 })
+      Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 400 })
+      Object.defineProperty(scroller, 'scrollTop', {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value) => {
+          scrollTop = value >= 1_000_000_000 ? 800 : value
+        },
+      })
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(16)
+      })
+      fireEvent.scroll(scroller)
+      scrollTop = 300
+      fireEvent.scroll(scroller)
+      expect(screen.getByRole('button', { name: 'Latest' })).toBeTruthy()
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000)
+      })
+
+      expect(scrollTop).toBe(800)
+      expect(screen.queryByRole('button', { name: 'Latest' })).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('keeps auto-scrolling when new output arrives while already near the bottom', async () => {
@@ -3041,7 +3149,7 @@ describe('MessageList nested tool calls', () => {
 
     const { container } = render(<MessageList />)
     const scroller = container.querySelector('.overflow-y-auto') as HTMLDivElement
-    let scrollTop = 180
+    let scrollTop = 800
     Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 1200 })
     Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 400 })
     Object.defineProperty(scroller, 'scrollTop', {
@@ -3053,6 +3161,8 @@ describe('MessageList nested tool calls', () => {
     })
 
     await waitForProgrammaticScrollReset()
+    fireEvent.scroll(scroller)
+    scrollTop = 180
     fireEvent.scroll(scroller)
     expect(screen.getByRole('button', { name: 'Latest' })).toBeTruthy()
 
@@ -3159,7 +3269,7 @@ describe('MessageList nested tool calls', () => {
 
     const { container } = render(<MessageList />)
     const scroller = container.querySelector('.overflow-y-auto') as HTMLDivElement
-    let scrollTop = 120
+    let scrollTop = 600
     Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 1000 })
     Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 400 })
     Object.defineProperty(scroller, 'scrollTop', {
@@ -3172,6 +3282,8 @@ describe('MessageList nested tool calls', () => {
 
     scrollIntoView.mockClear()
     await waitForProgrammaticScrollReset()
+    fireEvent.scroll(scroller)
+    scrollTop = 120
     fireEvent.scroll(scroller)
     fireEvent.click(screen.getByRole('button', { name: 'Latest' }))
 
@@ -3229,7 +3341,7 @@ describe('MessageList nested tool calls', () => {
 
     const { container } = render(<MessageList />)
     const scroller = container.querySelector('.overflow-y-auto') as HTMLDivElement
-    let scrollTop = 120
+    let scrollTop = 600
     Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 1000 })
     Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 400 })
     Object.defineProperty(scroller, 'scrollTop', {
@@ -3242,6 +3354,8 @@ describe('MessageList nested tool calls', () => {
 
     scrollIntoView.mockClear()
     await waitForProgrammaticScrollReset()
+    fireEvent.scroll(scroller)
+    scrollTop = 120
     fireEvent.scroll(scroller)
     expect(screen.getByRole('button', { name: 'Latest' })).toBeTruthy()
 
@@ -3304,7 +3418,7 @@ describe('MessageList nested tool calls', () => {
 
     const { container } = render(<MessageList />)
     const scroller = container.querySelector('.overflow-y-auto') as HTMLDivElement
-    let scrollTop = 120
+    let scrollTop = 600
     Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 1000 })
     Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 400 })
     Object.defineProperty(scroller, 'scrollTop', {
@@ -3317,6 +3431,8 @@ describe('MessageList nested tool calls', () => {
 
     scrollIntoView.mockClear()
     await waitForProgrammaticScrollReset()
+    fireEvent.scroll(scroller)
+    scrollTop = 120
     fireEvent.scroll(scroller)
     expect(screen.getByRole('button', { name: 'Latest' })).toBeTruthy()
 
