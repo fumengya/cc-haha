@@ -2442,6 +2442,122 @@ describe('MessageList nested tool calls', () => {
     }
   })
 
+  it('cancels light scrollback auto-resume after deeper user scrollback', async () => {
+    vi.useFakeTimers()
+    try {
+      useChatStore.setState({
+        sessions: {
+          [ACTIVE_TAB]: makeSessionState({
+            chatState: 'streaming',
+            messages: [
+              {
+                id: 'user-1',
+                type: 'user_text',
+                content: 'deep review prompt',
+                timestamp: 1,
+              },
+            ],
+            streamingText: 'streaming',
+          }),
+        },
+      })
+
+      const { container } = render(<MessageList />)
+      const scroller = container.querySelector('.overflow-y-auto') as HTMLDivElement
+      let scrollTop = 800
+      Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 1200 })
+      Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 400 })
+      Object.defineProperty(scroller, 'scrollTop', {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value) => {
+          scrollTop = value >= 1_000_000_000 ? 800 : value
+        },
+      })
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(16)
+      })
+      fireEvent.scroll(scroller)
+      scrollTop = 300
+      fireEvent.scroll(scroller)
+      scrollTop = 100
+      fireEvent.scroll(scroller)
+      fireEvent.scroll(scroller)
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000)
+      })
+
+      expect(scrollTop).toBe(100)
+      expect(screen.getByRole('button', { name: 'Latest' })).toBeTruthy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cancels pending light scrollback auto-resume when switching sessions', async () => {
+    vi.useFakeTimers()
+    try {
+      useTabStore.setState({
+        activeTabId: 'session-a',
+        tabs: [
+          { sessionId: 'session-a', title: 'A', type: 'session' as const, status: 'running' },
+          { sessionId: 'session-b', title: 'B', type: 'session' as const, status: 'running' },
+        ],
+      })
+      useChatStore.setState({
+        sessions: {
+          'session-a': makeSessionState({
+            chatState: 'streaming',
+            messages: [{ id: 'a-user', type: 'user_text', content: 'A prompt', timestamp: 1 }],
+            streamingText: 'A streaming',
+          }),
+          'session-b': makeSessionState({
+            chatState: 'streaming',
+            messages: [{ id: 'b-user', type: 'user_text', content: 'B prompt', timestamp: 1 }],
+            streamingText: 'B streaming',
+          }),
+        },
+      })
+
+      const { container } = render(<MessageList />)
+      const scroller = container.querySelector('.overflow-y-auto') as HTMLDivElement
+      let scrollTop = 800
+      Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 1200 })
+      Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 400 })
+      Object.defineProperty(scroller, 'scrollTop', {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value) => {
+          scrollTop = value >= 1_000_000_000 ? 800 : value
+        },
+      })
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(16)
+      })
+      fireEvent.scroll(scroller)
+      scrollTop = 300
+      fireEvent.scroll(scroller)
+      expect(screen.getByRole('button', { name: 'Latest' })).toBeTruthy()
+
+      act(() => {
+        useTabStore.setState({ activeTabId: 'session-b' })
+      })
+      expect(screen.getByText('B streaming')).toBeTruthy()
+      scrollTop = 300
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000)
+      })
+
+      expect(scrollTop).toBe(300)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps auto-scrolling when new output arrives while already near the bottom', async () => {
     const scrollIntoView = vi.fn()
     Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
