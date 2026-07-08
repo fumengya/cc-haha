@@ -927,7 +927,9 @@ type MessageListProps = {
   compact?: boolean
 }
 
-const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 48
+const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 120
+const LIGHT_REVIEW_DISTANCE_PX = 600
+const LIGHT_REVIEW_AUTO_RESUME_MS = 5_000
 const SCROLL_BOTTOM_SENTINEL = 1_000_000_000
 const MAX_SCROLL_SNAPSHOTS = 100
 const VIRTUALIZE_MIN_RENDER_ITEMS = 120
@@ -1400,6 +1402,9 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
   const lastAutoScrollAtRef = useRef(0)
   const lastContentResizeFollowHeightRef = useRef<number | null>(null)
   const shouldAutoScrollRef = useRef(true)
+  const lastObservedScrollTopRef = useRef<number | null>(null)
+  const lastUserInteractionAtRef = useRef<number | null>(null)
+  const lightReviewResumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isProgrammaticScrollingRef = useRef(false)
   const ignoreProgrammaticScrollUntilRef = useRef(0)
   const ignoreProgrammaticScrollTopRef = useRef<number | null>(null)
@@ -1434,6 +1439,9 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
     if (measureFlushFrameRef.current !== null) {
       cancelAnimationFrame(measureFlushFrameRef.current)
     }
+    if (lightReviewResumeTimerRef.current !== null) {
+      clearTimeout(lightReviewResumeTimerRef.current)
+    }
   }, [])
 
   const syncVirtualViewportFromContainer = useCallback((container: HTMLElement) => {
@@ -1463,6 +1471,7 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
     if (container) {
       setScrollToBottomWithoutLayoutRead(container, behavior)
       requestedScrollTop = container.scrollTop
+      lastObservedScrollTopRef.current = requestedScrollTop
       ignoreProgrammaticScrollTopRef.current = requestedScrollTop
     }
     setVirtualViewport((current) => ({
@@ -1532,9 +1541,12 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
     // prevent the jump-to-latest button from flickering during auto-scroll.
     const container = scrollContainerRef.current
     if (!container) return
+    const currentScrollTop = container.scrollTop
+    const previousScrollTop = lastObservedScrollTopRef.current
+    lastObservedScrollTopRef.current = currentScrollTop
     const matchesProgrammaticScrollTop =
       ignoreProgrammaticScrollTopRef.current !== null &&
-      Math.abs(container.scrollTop - ignoreProgrammaticScrollTopRef.current) < 1
+      Math.abs(currentScrollTop - ignoreProgrammaticScrollTopRef.current) < 1
     const shouldIgnoreRecentProgrammaticScroll =
       matchesProgrammaticScrollTop &&
       (
@@ -1547,16 +1559,60 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
     }
     syncVirtualViewportFromContainer(container)
     const isAtBottom = isNearScrollBottom(container)
-    shouldAutoScrollRef.current = isAtBottom
-    setShowJumpToLatest(!isAtBottom)
+    if (isAtBottom) {
+      shouldAutoScrollRef.current = true
+      setShowJumpToLatest(false)
+      if (lightReviewResumeTimerRef.current !== null) {
+        clearTimeout(lightReviewResumeTimerRef.current)
+        lightReviewResumeTimerRef.current = null
+      }
+    } else {
+      const userScrolledUp = previousScrollTop !== null && currentScrollTop < previousScrollTop - 1
+      if (userScrolledUp) {
+        shouldAutoScrollRef.current = false
+        lastUserInteractionAtRef.current = performance.now()
+        setShowJumpToLatest(true)
+        const distanceFromBottom = container.scrollHeight - currentScrollTop - container.clientHeight
+        if (distanceFromBottom <= LIGHT_REVIEW_DISTANCE_PX) {
+          if (lightReviewResumeTimerRef.current !== null) {
+            clearTimeout(lightReviewResumeTimerRef.current)
+          }
+          lightReviewResumeTimerRef.current = setTimeout(() => {
+            const latestContainer = scrollContainerRef.current
+            if (!latestContainer || shouldAutoScrollRef.current) return
+            const latestDistanceFromBottom = latestContainer.scrollHeight - latestContainer.scrollTop - latestContainer.clientHeight
+            const lastInteractionAt = lastUserInteractionAtRef.current
+            if (
+              latestDistanceFromBottom <= LIGHT_REVIEW_DISTANCE_PX &&
+              lastInteractionAt !== null &&
+              performance.now() - lastInteractionAt >= LIGHT_REVIEW_AUTO_RESUME_MS
+            ) {
+              scrollToBottom('smooth')
+            }
+          }, LIGHT_REVIEW_AUTO_RESUME_MS)
+        } else if (lightReviewResumeTimerRef.current !== null) {
+          clearTimeout(lightReviewResumeTimerRef.current)
+          lightReviewResumeTimerRef.current = null
+        }
+      } else if (shouldAutoScrollRef.current) {
+        setShowJumpToLatest(false)
+      } else {
+        setShowJumpToLatest(true)
+      }
+    }
 
     if (resolvedSessionId) {
       rememberSessionScroll(resolvedSessionId, container)
     }
-  }, [resolvedSessionId, syncVirtualViewportFromContainer])
+  }, [resolvedSessionId, scrollToBottom, syncVirtualViewportFromContainer])
 
   useLayoutEffect(() => {
     if (lastSessionIdRef.current !== resolvedSessionId) {
+      if (lightReviewResumeTimerRef.current !== null) {
+        clearTimeout(lightReviewResumeTimerRef.current)
+        lightReviewResumeTimerRef.current = null
+      }
+      lastUserInteractionAtRef.current = null
       const snapshot = resolvedSessionId ? sessionScrollSnapshots.get(resolvedSessionId) : undefined
       shouldAutoScrollRef.current = snapshot?.wasAtBottom ?? true
       lastSessionIdRef.current = resolvedSessionId
@@ -1579,6 +1635,7 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
         ignoreProgrammaticScrollUntilRef.current = performance.now() + 250
         ignoreProgrammaticScrollTopRef.current = snapshot.scrollTop
         setScrollTopWithoutLayoutRead(container, snapshot.scrollTop)
+        lastObservedScrollTopRef.current = snapshot.scrollTop
         setVirtualViewport((current) => ({
           scrollTop: snapshot.scrollTop,
           viewportHeight: container.clientHeight || current.viewportHeight || VIRTUAL_DEFAULT_VIEWPORT_HEIGHT,
@@ -1593,6 +1650,7 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
         lastAutoScrollAtRef.current = performance.now()
         shouldAutoScrollRef.current = true
         setScrollToBottomWithoutLayoutRead(container, 'auto')
+        lastObservedScrollTopRef.current = container.scrollTop
         setVirtualViewport((current) => ({
           scrollTop: SCROLL_BOTTOM_SENTINEL,
           viewportHeight: container.clientHeight || current.viewportHeight || VIRTUAL_DEFAULT_VIEWPORT_HEIGHT,
